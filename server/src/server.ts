@@ -6,13 +6,10 @@ import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
 
-import errorHandler from "../middlewares/error.middleware";
-
-// import type { ApiResponse } from "shared/dist";
+import errorHandler from "./libs/middlewares/error.middleware";
 
 export function createApp(): Hono {
 	const api = new Hono().basePath("/api");
-	// .route("/auth", authRoutes)
 
 	const app = new Hono()
 		.use(cors())
