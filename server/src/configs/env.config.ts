@@ -1,0 +1,43 @@
+import dotenv from "dotenv";
+import { z } from "zod";
+
+dotenv.config({ path: ".env.development" });
+
+export type EnvConfig = z.infer<typeof envSchema>;
+
+console.log("Loading environment variables..");
+
+const envSchema = z.object({
+	GOOGLE_CLOUD_PROJECT_ID: z.string().min(1),
+	GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1),
+	DATABASE_URL: z.string().min(1),
+	ELEVENLABS_API_KEY: z.string().min(1),
+	GOOGLE_CLIENT_ID: z.string().min(1),
+	GOOGLE_CLIENT_SECRET: z.string().min(1),
+	BASE_URL: z.string().min(1).default("http://localhost:3000"),
+	PORT: z
+		.string()
+		.min(1)
+		.transform((s) => {
+			const n = Number(s);
+			if (Number.isNaN(n)) throw new Error("PORT must be a number");
+			return n;
+		}),
+	NODE_ENV: z.string().min(1),
+	JWT_SECRET: z.string().min(1),
+	JWT_PUBLIC_KEY: z.string().min(1),
+});
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+	console.error("Invalid environment variables:");
+	parsed.error.issues.forEach((issue) => {
+		console.error(`- ${issue.path.join(".")}: ${issue.message}`);
+	});
+	throw new Error("Invalid environment variables");
+}
+
+console.log("Environment variables loaded");
+
+export const env: EnvConfig = parsed.data;
