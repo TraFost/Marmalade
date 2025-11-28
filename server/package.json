@@ -9,11 +9,18 @@
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.19.6",
+		"@hono/zod-validator": "^0.7.5",
+		"drizzle-orm": "^0.44.7",
 		"hono": "^4.7.11",
-		"shared": "workspace:*"
+		"pg": "^8.16.3",
+		"postgres": "^3.4.7",
+		"shared": "workspace:*",
+		"zod": "^4.1.13",
+		"zod-validation-error": "^5.0.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.0.0",
+		"drizzle-kit": "^0.31.7",
 		"tsx": "^4.19.0"
 	}
 }

@@ -1,10 +1,10 @@
 {
-	"name": "bhvr",
-	"version": "0.5.0",
-	"description": "A monorepo template built with pnpm, Hono, Vite, and React",
-	"author": "Steve Simkins",
+	"name": "marmalade",
+	"version": "0.0.1",
+	"description": "Voice-based mental health companion that remembers you over time.",
+	"author": "Rahman Nurudin",
 	"license": "MIT",
-	"homepage": "https://github.com/stevedylandev/bhvr",
+	"homepage": "https://github.com/TraFost/marmalade",
 	"packageManager": "pnpm@9.0.0",
 	"workspaces": [
 		"./server",
@@ -28,7 +28,8 @@
 		"react",
 		"vite",
 		"monorepo",
-		"turbo"
+		"turbo",
+		"pnpm"
 	],
 	"devDependencies": {
 		"turbo": "^2.5.5"
