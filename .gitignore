@@ -37,8 +37,5 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
-# Bun
-bun.lockb
-
 # Turbo
 .turbo

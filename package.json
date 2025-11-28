@@ -1,11 +1,11 @@
 {
 	"name": "bhvr",
 	"version": "0.5.0",
-	"description": "A monorepo template built with Bun, Hono, Vite, and React",
+	"description": "A monorepo template built with pnpm, Hono, Vite, and React",
 	"author": "Steve Simkins",
 	"license": "MIT",
 	"homepage": "https://github.com/stevedylandev/bhvr",
-	"packageManager": "bun@1.2.4",
+	"packageManager": "pnpm@9.0.0",
 	"workspaces": [
 		"./server",
 		"./client",
@@ -24,7 +24,6 @@
 		"postinstall": "turbo build --filter=shared --filter=server"
 	},
 	"keywords": [
-		"bun",
 		"hono",
 		"react",
 		"vite",
@@ -32,7 +31,6 @@
 		"turbo"
 	],
 	"devDependencies": {
-		"bun-types": "latest",
 		"turbo": "^2.5.5"
 	},
 	"peerDependencies": {
