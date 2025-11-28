@@ -5,6 +5,9 @@
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
+		"db:migrate": "npx drizzle-kit migrate",
+		"db:generate": "npx drizzle-kit generate",
+		"db:drop": "npx drizzle-kit drop",
 		"dev": "tsx watch src/dev.ts"
 	},
 	"dependencies": {
