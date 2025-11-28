@@ -1,3 +1,3 @@
-import { users, sessions, accounts, verifications } from "./user.schema";
+import { users } from "./users.schema";
 
-export { users, sessions, accounts, verifications };
+export { users };
