@@ -1,19 +1,33 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
-import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
+import { pinoLogger } from "hono-pino";
+import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
 
-export function createApp(): Hono {
+import { corsConfig } from "./configs/cors.config";
+
+export function createApp() {
 	const api = new Hono().basePath("/api");
 
 	const app = new Hono()
-		.use(cors())
-		.use(logger())
+		.use(cors(corsConfig))
+		.use(
+			pinoLogger({
+				pino: pino({
+					base: null,
+					level: "trace",
+					transport: {
+						target: "hono-pino/debug-log",
+					},
+					timestamp: pino.stdTimeFunctions.epochTime,
+				}),
+			})
+		)
 		.use(timing())
 		.use(secureHeaders())
 		.use(csrf())
