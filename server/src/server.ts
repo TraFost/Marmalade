@@ -8,11 +8,13 @@ import { pinoLogger } from "hono-pino";
 import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
+import authRoute from "./routes/auth.route";
 
 import { corsConfig } from "./configs/cors.config";
+import auth from "./configs/auth.config";
 
 export function createApp() {
-	const api = new Hono().basePath("/api");
+	const api = new Hono().basePath("/api").route("/auth", authRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
@@ -39,6 +41,12 @@ export function createApp() {
 		.get("/", (c) => {
 			return c.text("Hello, Welcome to marmalade API!");
 		});
+
+	app.on(
+		["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		"/api/auth/*",
+		(c) => auth.handler(c.req.raw)
+	);
 
 	app.route("/api", api);
 

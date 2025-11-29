@@ -4,18 +4,25 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../libs/db/db.lib";
 import * as schema from "../libs/db/schemas";
 
+import { env } from "../configs/env.config";
+
 const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
-		schema: schema,
+		schema,
 	}),
+	emailAndPassword: {
+		enabled: true,
+	},
 	socialProviders: {
 		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID!,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+			clientId: env.GOOGLE_CLIENT_ID,
+			clientSecret: env.GOOGLE_CLIENT_SECRET,
 		},
 	},
-	baseURL: process.env.BASE_URL || "http://localhost:5173",
+	baseURL: env.BASE_URL,
+	trustedOrigins: [env.FRONTEND_URL],
 });
 
 export default auth;
+export type AuthSession = typeof auth.$Infer.Session;
