@@ -70,15 +70,8 @@ export class AuthService {
 	}
 
 	async getUserProfile(userId: string) {
-		try {
-			const user = await this.authRepository.findUserById(userId);
-			if (user.length === 0) {
-				throw new Error("User not found");
-			}
-			return user[0];
-		} catch {
-			throw new Error("Failed to get user profile");
-		}
+		const user = await this.authRepository.findUserById(userId);
+		return user.length > 0 ? user[0] : null;
 	}
 
 	async updateUserProfile(
@@ -89,14 +82,7 @@ export class AuthService {
 			email: string;
 		}>
 	) {
-		try {
-			const updatedUser = await this.authRepository.updateUser(userId, updates);
-			if (updatedUser.length === 0) {
-				throw new Error("User not found");
-			}
-			return updatedUser[0];
-		} catch {
-			throw new Error("Failed to update user profile");
-		}
+		const updatedUser = await this.authRepository.updateUser(userId, updates);
+		return updatedUser.length > 0 ? updatedUser[0] : null;
 	}
 }
