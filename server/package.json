@@ -16,6 +16,7 @@
 		"better-auth": "^1.4.3",
 		"dotenv": "^17.2.3",
 		"drizzle-orm": "^0.44.7",
+		"drizzle-zod": "^0.8.3",
 		"hono": "^4.7.11",
 		"hono-pino": "^0.10.3",
 		"pg": "^8.16.3",
