@@ -15,6 +15,7 @@ const envSchema = z.object({
 	GOOGLE_CLIENT_ID: z.string().min(1),
 	GOOGLE_CLIENT_SECRET: z.string().min(1),
 	BASE_URL: z.string().min(1).default("http://localhost:3000"),
+	FRONTEND_URL: z.string().min(1).default("http://localhost:5173"),
 	PORT: z
 		.string()
 		.min(1)
