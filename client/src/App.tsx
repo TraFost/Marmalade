@@ -1,51 +1,17 @@
-import { useState } from "react";
-import beaver from "../public/beaver.svg";
-import type { ApiResponse } from "shared";
-import "./App.css";
+import { Button } from "@/shared/components/atoms/button";
+import { Card } from "@/shared/components/atoms/card";
+import { Input } from "@/shared/components/atoms/input";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
-
-function App() {
-	const [data, setData] = useState<ApiResponse | undefined>();
-
-	async function sendRequest() {
-		try {
-			const req = await fetch(`${SERVER_URL}/hello`);
-			const res: ApiResponse = await req.json();
-			setData(res);
-		} catch (error) {
-			console.log(error);
-		}
-	}
-
+export default function App() {
 	return (
-		<>
-			<div>
-				<a href="https://github.com/stevedylandev/bhvr" target="_blank">
-					<img src={beaver} className="logo" alt="beaver logo" />
-				</a>
-			</div>
-			<h1>bhvr</h1>
-			<h2>Pnpm + Hono + Vite + React</h2>
-			<p>A typesafe fullstack monorepo</p>
-			<div className="card">
-				<div className="button-container">
-					<button onClick={sendRequest}>Call API</button>
-					<a className="docs-link" target="_blank" href="https://bhvr.dev">
-						Docs
-					</a>
-				</div>
-				{data && (
-					<pre className="response">
-						<code>
-							Message: {data.message} <br />
-							Success: {data.success.toString()}
-						</code>
-					</pre>
-				)}
-			</div>
-		</>
+		<div className="min-h-screen flex items-center justify-center">
+			<Card className="p-6 space-y-4">
+				<h1 className="text-2xl font-semibold tracking-tight">
+					Marmalade UI Shell
+				</h1>
+				<Input placeholder="Type something..." />
+				<Button>Primary</Button>
+			</Card>
+		</div>
 	);
 }
-
-export default App;
