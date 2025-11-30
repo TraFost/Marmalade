@@ -6,11 +6,34 @@ Marmalade is a voice-based mental health companion monorepo using pnpm workspace
 
 ## Architecture
 
-- **Client**: React 19 + Vite in `client/`, depends on `shared` and `server` workspaces
+- **Client**: React 19 + Vite + TypeScript + Tailwind CSS v4 + shadcn/ui in `client/`, depends on `shared` and `server` workspaces
 - **Server**: Hono API in `server/`, with Drizzle ORM + Postgres, better-auth for authentication
 - **Shared**: TypeScript types in `shared/`, built with `tsc`
 - **DB**: Postgres with Drizzle migrations in `server/drizzle/`
 - **Auth**: better-auth with email/password and Google OAuth, sessions inferred as `AuthSession`
+
+## Client Folder Structure
+
+Feature-based at top level, atomic inside each feature.
+
+- `src/app/`: App-level providers, router, layout
+- `src/features/{feature}/`: Domain-specific features (auth, journaling, dashboard)
+  - `components/`: Atomic design (atoms, molecules, organisms)
+  - `hooks/`, `services/`, `types/`, `pages/`
+- `src/shared/`: Cross-feature shared code
+  - `components/ui/`: shadcn/ui components
+  - `components/`: Shared atoms/molecules/organisms
+  - `hooks/`, `lib/`, `config/`
+- `src/styles/`: Extra global styles
+- `src/main.tsx`, `src/App.tsx`, `src/index.css`
+
+## Client Conventions
+
+- **Imports**: Always use `@/` alias, no relative imports like `../../../`
+- **UI Components**: Primitives from `@/shared/components/ui`, feature-specific in feature's components
+- **Styling**: Tailwind CSS v4, shadcn/ui for components
+- **Adding shadcn Components**: `npx shadcn@latest add <component>`, ensure placed in `@/shared/components/ui`
+- **Path Aliases**: `@/*` → `./src/*` in tsconfig.json and tsconfig.app.json
 
 ## Key Workflows
 
