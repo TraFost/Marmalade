@@ -6,11 +6,10 @@ import { AppRouter } from "@/app/router/route";
 export function AppProviders({ children }: { children: ReactNode }) {
 	return (
 		// <QueryProvider>
-		<main className="size-full">
+		<>
 			<AppRouter />
-
 			{children}
-		</main>
+		</>
 		// </QueryProvider>
 	);
 }
