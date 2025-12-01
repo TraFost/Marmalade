@@ -1,17 +1,21 @@
-import { Button } from "@/shared/components/atoms/button";
-import { Card } from "@/shared/components/atoms/card";
-import { Input } from "@/shared/components/atoms/input";
+import { AboutSection } from "@/shared/components/organisms/home/about.home";
+import { CallToActionSection } from "@/shared/components/organisms/home/cta.home";
+import { FeatureSection } from "@/shared/components/organisms/home/features.home";
+import { HeroSection } from "@/shared/components/organisms/home/hero.home";
+import { HowItWorksSection } from "@/shared/components/organisms/home/how-it-works.home";
+import { InspirationSection } from "@/shared/components/organisms/home/inspiration.home";
+import { SupportSection } from "@/shared/components/organisms/home/support.home";
 
-export default function HomePage() {
+export function HomePage() {
 	return (
-		<div className="min-h-screen flex items-center justify-center">
-			<Card className="p-6 space-y-4">
-				<h1 className="text-2xl font-semibold tracking-tight">
-					Marmalade UI Shell
-				</h1>
-				<Input placeholder="Type something..." />
-				<Button>Primary</Button>
-			</Card>
+		<div className="bg-background font-sans text-foreground antialiased selection:bg-primary selection:text-primary-foreground">
+			<HeroSection />
+			<AboutSection />
+			<FeatureSection />
+			<HowItWorksSection />
+			<InspirationSection />
+			<SupportSection />
+			<CallToActionSection />
 		</div>
 	);
 }

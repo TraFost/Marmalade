@@ -1,11 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-button:focus,
-button:focus-visible {
-	outline: 4px auto -webkit-focus-ring-color;
-}
-
 :root {
 	--background: #fff4e5;
 	--foreground: #2a2a2a;
@@ -126,4 +121,50 @@ button:focus-visible {
 	body {
 		@apply bg-background text-foreground;
 	}
+}
+
+html {
+	scroll-behavior: smooth;
+	height: 100dvh;
+	width: 100dvw;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	overflow-x: hidden;
+}
+
+button:focus,
+button:focus-visible {
+	outline: 4px auto -webkit-focus-ring-color;
+}
+
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #f90 #f5f5f5;
+}
+
+html::-webkit-scrollbar-track {
+	-webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+	background-color: #f5f5f5;
+}
+
+html::-webkit-scrollbar {
+	width: 10px;
+	background-color: #f5f5f5;
+}
+
+html::-webkit-scrollbar-thumb {
+	background-color: #f90;
+	background-image: -webkit-linear-gradient(
+		45deg,
+		rgba(255, 255, 255, 0.2) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(255, 255, 255, 0.2) 50%,
+		rgba(255, 255, 255, 0.2) 75%,
+		transparent 75%,
+		transparent
+	);
 }
