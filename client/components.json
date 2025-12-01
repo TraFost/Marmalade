@@ -13,10 +13,12 @@
 	"iconLibrary": "lucide",
 	"aliases": {
 		"components": "@/shared/components/molecules",
-		"utils": "@/shared/lib/helper",
+		"utils": "@/shared/lib/helper/classname",
 		"ui": "@/shared/components/atoms",
 		"lib": "@/shared/lib",
 		"hooks": "@/shared/hooks"
 	},
-	"registries": {}
+	"registries": {
+		"@tailark": "https://tailark.com/r/{name}.json"
+	}
 }
