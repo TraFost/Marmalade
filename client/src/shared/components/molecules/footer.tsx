@@ -112,7 +112,6 @@ export function Footer({ className }: FooterProps) {
 				</div>
 			</div>
 			<div className="mx-auto mt-12 flex max-w-6xl flex-col items-center justify-between gap-4 border-t border-border/30 pt-8 text-center text-xs text-muted-foreground md:flex-row md:text-left">
-				<p>Created by Rahman Nurudin, 2025 — built from clarity and care.</p>
 				<div className="flex w-full justify-center gap-4 md:justify-end">
 					{socialIcons.map((social) =>
 						social.href ? (
