@@ -11,12 +11,15 @@ export function CallToActionSection() {
 					Let Marmalade walk with you — one gentle step at a time.
 				</p>
 				<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-					<Button className="w-full rounded-full px-8 py-4 text-lg font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:w-auto">
+					<Button
+						variant="primary"
+						className="w-full rounded-full px-10 py-4 text-lg font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
+					>
 						Begin Session
 					</Button>
 					<Button
-						variant="outline"
-						className="w-full rounded-full border-border px-8 py-4 text-lg font-medium text-foreground transition-all duration-300 hover:bg-muted sm:w-auto"
+						variant="secondary"
+						className="w-full rounded-full px-8 py-4 text-lg font-medium transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
 					>
 						View Demo
 					</Button>

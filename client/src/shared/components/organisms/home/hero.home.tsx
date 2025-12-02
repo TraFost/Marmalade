@@ -1,35 +1,45 @@
-import { Microphone, PlayCircle } from "@phosphor-icons/react";
+import { MicrophoneIcon, PlayCircleIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/shared/components/atoms/button";
 
 export function HeroSection() {
 	return (
-		<header className="relative px-6 pb-20 pt-32 md:pb-32 md:pt-48">
-			<div className="mx-auto max-w-4xl text-center">
-				<h1 className="mb-6 text-4xl font-medium leading-tight tracking-tight text-foreground md:text-6xl lg:text-7xl">
-					Someone to talk to — <br className="hidden md:block" />
-					<span className="font-serif italic text-foreground/70">
-						even when you don’t know where to start.
+		<section className="flex min-h-dvh items-center justify-center overflow-hidden px-6">
+			<div className="mx-auto flex max-w-4xl flex-col items-center text-center">
+				<p className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-primary">
+					Voice-first Companion
+				</p>
+				<h1 className="mb-6 text-3xl font-medium leading-tight tracking-tight text-foreground md:text-5xl">
+					Talking is hard.
+					<br />
+					<span className="font-serif italic text-primary">
+						Feeling alone is harder.
 					</span>
 				</h1>
-				<p className="mx-auto mb-10 max-w-2xl text-lg font-light leading-relaxed text-foreground/70 md:text-xl">
-					Marmalade is a voice-based mental-health companion that listens,
-					remembers, and gently helps you understand what you’re feeling.
+				<div className="my-6 h-px w-16 bg-primary/30" />
+				<p className="mx-auto max-w-2xl text-lg font-light leading-relaxed text-foreground/70">
+					Marmalade listens like the friend who never forgets what you shared.
+					Every pause, sigh, and half-finished sentence is treated with care, so
+					you can exhale without explaining yourself twice.
 				</p>
-				<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-					<Button className="w-full rounded-full px-8 py-4 text-base font-medium shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg sm:w-auto">
-						<Microphone size={20} weight="duotone" className="mr-2" />
-						Start Your First Session
+
+				<div className="flex w-full flex-col items-center gap-4 pt-6 sm:w-auto sm:flex-row">
+					<Button
+						variant="primary"
+						className="w-full rounded-full px-8 py-4 text-base font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-0.5 sm:w-auto"
+					>
+						<MicrophoneIcon size={24} weight="duotone" />
+						Start Session
 					</Button>
 					<Button
-						variant="outline"
-						className="w-full rounded-full border-border px-8 py-4 text-base text-foreground transition-all duration-300 hover:bg-muted sm:w-auto"
+						variant="secondary"
+						className="w-full rounded-full px-8 py-4 text-base font-medium tracking-tight transition-transform duration-300 hover:-translate-y-0.5 sm:w-auto"
 					>
-						<PlayCircle size={20} weight="duotone" className="mr-2" />
-						See How It Works
+						<PlayCircleIcon size={24} weight="duotone" />
+						How It Works
 					</Button>
 				</div>
 			</div>
-		</header>
+		</section>
 	);
 }

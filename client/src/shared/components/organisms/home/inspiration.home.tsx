@@ -1,26 +1,94 @@
-import { Cat } from "@phosphor-icons/react";
+import {
+	ArrowRightIcon,
+	HandshakeIcon,
+	MoonStarsIcon,
+	ShieldCheckIcon,
+	SparkleIcon,
+} from "@phosphor-icons/react";
+
+const HIGHLIGHTS = [
+	{
+		title: "Radical Acceptance",
+		description:
+			"Modeled after Rogers' unconditional positive regard. We don't judge your thoughts; we help you explore them.",
+		icon: HandshakeIcon,
+		accent: "bg-primary/15 text-primary",
+	},
+	{
+		title: "24/7 Presence",
+		description:
+			"Anxiety doesn't adhere to business hours. Whether it's 3 AM insomnia or a midday spiral, Marmalade listens.",
+		icon: MoonStarsIcon,
+		accent: "bg-foreground/5 text-foreground",
+	},
+	{
+		title: "Private by Design",
+		description:
+			"Local-first encryption keeps every whisper on your device. We never trade or monetize sensitive data.",
+		icon: ShieldCheckIcon,
+		accent: "bg-foreground/5 text-foreground",
+	},
+	{
+		title: "Guided Clarity",
+		description:
+			"When the world feels loud, we break overwhelm into grounded prompts so you can take one breath at a time.",
+		icon: SparkleIcon,
+		accent: "bg-accent/30 text-primary",
+	},
+];
 
 export function InspirationSection() {
 	return (
-		<section className="px-6 py-24">
-			<div className="mx-auto flex max-w-4xl flex-col gap-12 rounded-[2.5rem] bg-foreground p-8 text-primary-foreground md:flex-row md:p-16">
-				<div className="relative z-10 flex-1">
-					<span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-primary">
-						Our Inspiration
-					</span>
-					<h2 className="mb-6 text-3xl font-serif md:text-4xl">Why a cat?</h2>
-					<div className="space-y-4 text-lg font-light text-primary-foreground/80">
-						<p>Cats don’t judge.</p>
-						<p>They sit with you quietly.</p>
-						<p>They show up without demanding anything.</p>
-						<p className="mt-6 border-t border-white/20 pt-6 text-sm text-primary-foreground/70">
-							Marmalade’s mascot is inspired by an orange cat named Dila — a
-							reminder that comfort can be simple and soft.
+		<section id="story" className="px-6 py-24 lg:py-32">
+			<div className="mx-auto max-w-6xl lg:max-w-7xl">
+				<div className="grid gap-12 lg:grid-cols-12 lg:items-start">
+					<div className="space-y-6 lg:col-span-4 lg:sticky lg:top-24">
+						<p className="text-xs font-semibold uppercase tracking-[0.4em] text-primary">
+							Our Philosophy
 						</p>
+						<h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-5xl">
+							Why we built
+							<br />
+							<span className="text-primary/90">Marmalade.</span>
+						</h2>
+						<p className="text-base text-foreground/70">
+							Therapy is expensive. Friends are busy. Sometimes you just need a
+							space that exists solely for you to be heard—without judgment,
+							waiting lists, or fees.
+						</p>
+						<a
+							href="#"
+							className="group inline-flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-primary"
+						>
+							Read our manifesto
+							<ArrowRightIcon
+								size={16}
+								className="transition-transform group-hover:translate-x-1"
+							/>
+						</a>
 					</div>
-				</div>
-				<div className="relative flex h-48 w-48 shrink-0 items-center justify-center rounded-full border border-primary-foreground/30 bg-primary-foreground/10 md:h-64 md:w-64">
-					<Cat size={160} weight="duotone" className="text-primary" />
+					<div className="grid gap-6 sm:grid-cols-2 lg:col-span-8">
+						{HIGHLIGHTS.map(
+							({ title, description, icon: Icon, accent }, index) => (
+								<div
+									key={title}
+									className={`group rounded-3xl border border-border/40 bg-card/95 p-8 transition-colors duration-300 hover:bg-card ${
+										index === 0 ? "sm:col-span-2" : ""
+									}`}
+								>
+									<div
+										className={`mb-6 flex h-12 w-12 items-center justify-center rounded-2xl ${accent} transition-transform duration-300 group-hover:scale-110`}
+									>
+										<Icon size={26} weight="duotone" />
+									</div>
+									<h3 className="mb-3 text-xl font-semibold tracking-tight text-foreground">
+										{title}
+									</h3>
+									<p className="text-sm text-foreground/70">{description}</p>
+								</div>
+							)
+						)}
+					</div>
 				</div>
 			</div>
 		</section>

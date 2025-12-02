@@ -32,7 +32,7 @@ export function Navbar({ className }: NavbarProps) {
 					href="#"
 					className="flex items-center gap-3 text-lg font-medium tracking-tight"
 				>
-					<Logo className="h-5 text-foreground" uniColor />
+					<Logo className="h-5 text-foreground" />
 					<span>Marmalade</span>
 				</a>
 				<div className="hidden items-center gap-8 text-sm font-medium text-foreground/70 md:flex">
@@ -55,10 +55,7 @@ export function Navbar({ className }: NavbarProps) {
 						asChild
 						className="hidden text-sm font-medium text-foreground hover:text-primary sm:inline-flex"
 					>
-						<a href="#">Log in</a>
-					</Button>
-					<Button className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-primary-foreground transition-colors duration-300 hover:bg-primary">
-						Get Started
+						<a href="#">Get Started</a>
 					</Button>
 				</div>
 			</div>
