@@ -9,12 +9,16 @@ import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
 import authRoute from "./routes/auth.route";
+import screeningsRoute from "./routes/screenings.route";
 
 import { corsConfig } from "./configs/cors.config";
 import auth from "./configs/auth.config";
 
 export function createApp() {
-	const api = new Hono().basePath("/api").route("/auth", authRoute);
+	const api = new Hono()
+		.basePath("/api")
+		.route("/auth", authRoute)
+		.route("/screenings", screeningsRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
