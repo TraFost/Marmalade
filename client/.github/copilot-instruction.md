@@ -23,6 +23,7 @@ Use this guide whenever you touch the client bundle so we keep the feature-first
 - Always use the `@/` alias for imports; no deep relative paths.
 - Stick to Tailwind v4 utilities + CSS variables already defined (e.g., `bg-card`, `text-foreground`). Avoid inline styles unless unavoidable.
 - When composing class names dynamically, use the shared `cn` helper.
+- Use the existing `Button` variants (`primary`, `secondary`, etc.) instead of hand-rolling palette classes. Reserve per-instance classes for layout tweaks (width, spacing, motion) so color/contrast stays consistent.
 
 ### Adding New Sections (Example Workflow)
 
