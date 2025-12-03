@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import auth, { type AuthSession } from "../../configs/auth.config";
+import { auth, type AuthSession } from "../../configs/auth.config";
 
 export interface AuthContext {
 	user: AuthSession["user"] | null;

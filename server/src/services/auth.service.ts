@@ -1,7 +1,7 @@
 import type { ApiResponse } from "shared/src/types/response.type";
 
 import { AuthRepository } from "../repositories/auth.repository";
-import auth from "../configs/auth.config";
+import { auth } from "../configs/auth.config";
 
 export class AuthService {
 	private authRepository: AuthRepository;

@@ -15,7 +15,7 @@ export class AuthRepository {
 	async createUser(userData: {
 		id: string;
 		email: string;
-		name?: string;
+		name: string;
 		image?: string;
 	}) {
 		return await db.insert(users).values(userData).returning();
