@@ -5,8 +5,10 @@ import {
 	type RouteObject,
 } from "react-router";
 
-import { PUBLIC_PAGES } from "./public.route";
 import { PublicLayout } from "@/shared/components/organisms/layout/public-layout";
+
+import { PUBLIC_PAGES } from "./public.route";
+import { AUTH_PAGES } from "./auth.route";
 
 export interface Page {
 	id: string;
@@ -26,6 +28,10 @@ const router = createBrowserRouter([
 		id: "public-root",
 		element: <PublicLayoutRoute />,
 		children: PUBLIC_PAGES.map((p) => createRoute(p)),
+	},
+	{
+		id: "auth-root",
+		children: AUTH_PAGES.map((p) => createRoute(p)),
 	},
 ]);
 

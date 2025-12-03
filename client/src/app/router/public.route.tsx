@@ -1,5 +1,6 @@
 import { HomePage } from "@/features/home/pages/home.page";
-import { Page } from "./route";
+
+import type { Page } from "./route";
 
 export const PUBLIC_PAGES: Page[] = [
 	{
