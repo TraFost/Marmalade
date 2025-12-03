@@ -14,6 +14,7 @@ import {
 	stepFiveSchema,
 } from "./validators/screenings.validator";
 import { handleError } from "../libs/helper/error.helper";
+import { successWithData, failure } from "../libs/helper/response.helper";
 
 const screeningsService = new ScreeningService();
 
@@ -26,14 +27,11 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const screening = await screeningsService.startScreening(user?.id!);
 
 			return c.json(
-				{
-					success: true,
-					data: {
-						id: screening?.id,
-						status: screening?.status,
-						currentStep: screening?.currentStep,
-					},
-				},
+				successWithData("Screening started", {
+					id: screening?.id,
+					status: screening?.status,
+					currentStep: screening?.currentStep,
+				}),
 				201
 			);
 		} catch (error) {
@@ -45,14 +43,13 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepOne(id, body);
-			return c.json({
-				success: true,
-				data: {
+			return c.json(
+				successWithData("Step one saved", {
 					id,
 					status: updated?.status,
 					currentStep: updated?.currentStep,
-				},
-			});
+				})
+			);
 		} catch (error) {
 			return handleError(c, error);
 		}
@@ -63,14 +60,11 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepTwo(id, body);
 			return c.json(
-				{
-					success: true,
-					data: {
-						id,
-						status: updated?.status,
-						currentStep: updated?.currentStep,
-					},
-				},
+				successWithData("Step two saved", {
+					id,
+					status: updated?.status,
+					currentStep: updated?.currentStep,
+				}),
 				200
 			);
 		} catch (error) {
@@ -83,14 +77,11 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepThree(id, body);
 			return c.json(
-				{
-					success: true,
-					data: {
-						id,
-						status: updated?.status,
-						currentStep: updated?.currentStep,
-					},
-				},
+				successWithData("Step three saved", {
+					id,
+					status: updated?.status,
+					currentStep: updated?.currentStep,
+				}),
 				200
 			);
 		} catch (error) {
@@ -106,15 +97,12 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 				body
 			);
 			return c.json(
-				{
-					success: true,
-					data: {
-						id,
-						status: updated?.status,
-						currentStep: updated?.currentStep,
-						dassSummary,
-					},
-				},
+				successWithData("Step four saved", {
+					id,
+					status: updated?.status,
+					currentStep: updated?.currentStep,
+					dassSummary,
+				}),
 				200
 			);
 		} catch (error) {
@@ -127,29 +115,26 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const body = c.req.valid("json");
 			const completed = await screeningsService.completeStepFive(id, body);
 			return c.json(
-				{
-					success: true,
-					data: {
-						id,
-						status: completed?.status,
-						riskLevel: completed?.riskLevel,
-						dass: {
-							depressionScore: completed?.dassDepression,
-							depressionLevel: completed?.dassDepressionLevel,
-							anxietyScore: completed?.dassAnxiety,
-							anxietyLevel: completed?.dassAnxietyLevel,
-							stressScore: completed?.dassStress,
-							stressLevel: completed?.dassStressLevel,
-						},
-						overview: {
-							gender: completed?.gender,
-							ageRange: completed?.ageRange,
-							sleepQuality: completed?.sleepQuality,
-							happinessScore: completed?.happinessScore,
-							goals: completed?.goals ?? [],
-						},
+				successWithData("Screening completed", {
+					id,
+					status: completed?.status,
+					riskLevel: completed?.riskLevel,
+					dass: {
+						depressionScore: completed?.dassDepression,
+						depressionLevel: completed?.dassDepressionLevel,
+						anxietyScore: completed?.dassAnxiety,
+						anxietyLevel: completed?.dassAnxietyLevel,
+						stressScore: completed?.dassStress,
+						stressLevel: completed?.dassStressLevel,
 					},
-				},
+					overview: {
+						gender: completed?.gender,
+						ageRange: completed?.ageRange,
+						sleepQuality: completed?.sleepQuality,
+						happinessScore: completed?.happinessScore,
+						goals: completed?.goals ?? [],
+					},
+				}),
 				200
 			);
 		} catch (error) {
@@ -160,25 +145,24 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 		try {
 			const userId = c.req.query("userId");
 			if (!userId) {
-				return c.json(
-					{ success: false, message: "userId query param required" },
-					400
-				);
+				return c.json(failure("userId query param required"), 400);
 			}
 
 			const history = await screeningsService.listByUser(userId);
-			return c.json({
-				success: true,
-				data: history.map((item) => ({
-					id: item.id,
-					startedAt: item.startedAt,
-					completedAt: item.completedAt,
-					riskLevel: item.riskLevel,
-					depressionLevel: item.dassDepressionLevel,
-					anxietyLevel: item.dassAnxietyLevel,
-					stressLevel: item.dassStressLevel,
-				})),
-			});
+			return c.json(
+				successWithData(
+					"Screening history fetched",
+					history.map((item) => ({
+						id: item.id,
+						startedAt: item.startedAt,
+						completedAt: item.completedAt,
+						riskLevel: item.riskLevel,
+						depressionLevel: item.dassDepressionLevel,
+						anxietyLevel: item.dassAnxietyLevel,
+						stressLevel: item.dassStressLevel,
+					}))
+				)
+			);
 		} catch (error) {
 			return handleError(c, error);
 		}
@@ -188,9 +172,9 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 			const id = c.req.param("id");
 			const screening = await screeningsService.getScreening(id);
 			if (!screening) {
-				return c.json({ success: false, message: "Screening not found" }, 404);
+				return c.json(failure("Screening not found"), 404);
 			}
-			return c.json({ success: true, data: screening }, 200);
+			return c.json(successWithData("Screening fetched", screening), 200);
 		} catch (error) {
 			return handleError(c, error);
 		}
