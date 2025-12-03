@@ -1,9 +1,9 @@
-import Login from "@/shared/components/organisms/login/login";
+import { LoginForm } from "@/shared/components/organisms/auth/login";
 
-import { useAuth } from "@/shared/hooks/auth.hook";
+import { useAuth } from "@/shared/hooks/use-auth.hook";
 
 export function AuthLoginPage() {
 	const { signIn } = useAuth();
 
-	return <Login onSignIn={signIn} />;
+	return <LoginForm onSignIn={signIn} />;
 }
