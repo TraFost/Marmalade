@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { csrf } from "hono/csrf";
+// import { csrf } from "hono/csrf";
 import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
@@ -12,7 +12,7 @@ import authRoute from "./routes/auth.route";
 import screeningsRoute from "./routes/screenings.route";
 
 import { corsConfig } from "./configs/cors.config";
-import auth from "./configs/auth.config";
+import { auth } from "./configs/auth.config";
 
 export function createApp() {
 	const api = new Hono()
@@ -36,7 +36,7 @@ export function createApp() {
 		)
 		.use(timing())
 		.use(secureHeaders())
-		.use(csrf())
+		// .use(csrf())
 		.use(prettyJSON())
 		.onError(errorHandler)
 		.notFound((c) =>

@@ -6,13 +6,14 @@ import * as schema from "../libs/db/schemas";
 
 import { env } from "../configs/env.config";
 
-const auth = betterAuth({
+export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
 		schema,
+		usePlural: true,
 	}),
 	emailAndPassword: {
-		enabled: true,
+		enabled: false,
 	},
 	socialProviders: {
 		google: {
@@ -24,5 +25,4 @@ const auth = betterAuth({
 	trustedOrigins: [env.FRONTEND_URL],
 });
 
-export default auth;
 export type AuthSession = typeof auth.$Infer.Session;
