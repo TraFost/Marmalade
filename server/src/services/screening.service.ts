@@ -107,6 +107,7 @@ export const computeRiskLevel = (
 
 export class ScreeningService {
 	private repository: ScreeningRepository;
+	private MAX_STEP = 5;
 
 	constructor() {
 		this.repository = new ScreeningRepository();
@@ -230,7 +231,7 @@ export class ScreeningService {
 			throw new AppError("Screening not found", 404, "SCREENING_NOT_FOUND");
 		}
 
-		if (screening.status === "completed" && step < 5) {
+		if (screening.status === "completed" && step < this.MAX_STEP) {
 			throw new AppError(
 				"Screening already completed",
 				400,
@@ -238,7 +239,9 @@ export class ScreeningService {
 			);
 		}
 
-		if ((screening.currentStep ?? 1) < step) {
+		const isOverstep = (screening.currentStep ?? 1) < step;
+
+		if (isOverstep) {
 			throw new AppError(
 				"Cannot jump ahead of current step",
 				400,
