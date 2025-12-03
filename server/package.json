@@ -1,14 +1,19 @@
 {
-	"name": "server",
+	"name": "marmalade-server",
 	"version": "0.0.1",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
-		"db:migrate": "npx drizzle-kit migrate",
-		"db:generate": "npx drizzle-kit generate",
-		"db:drop": "npx drizzle-kit drop",
-		"dev": "tsx watch src/dev.ts"
+		"dev:db:migrate": "cross-env NODE_ENV=development npx drizzle-kit migrate",
+		"dev:db:generate": "cross-env NODE_ENV=development npx drizzle-kit generate",
+		"dev:db:drop": "cross-env NODE_ENV=development npx drizzle-kit drop",
+		"dev": "cross-env NODE_ENV=development tsx watch src/dev.ts",
+		"prod:db:migrate": "cross-env NODE_ENV=production npx drizzle-kit migrate",
+		"prod:db:generate": "cross-env NODE_ENV=production npx drizzle-kit generate",
+		"prod:db:drop": "cross-env NODE_ENV=production npx drizzle-kit drop",
+		"prod:build": "cross-env NODE_ENV=production tsc",
+		"prod": "cross-env NODE_ENV=production node dist/index.js"
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.19.6",
@@ -28,6 +33,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^22.0.0",
+		"cross-env": "^10.1.0",
 		"drizzle-kit": "^0.31.7",
 		"tsx": "^4.19.0"
 	}

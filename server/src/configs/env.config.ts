@@ -1,11 +1,13 @@
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config({ path: ".env.development" });
+const nodeEnv = process.env.NODE_ENV ?? "development";
+
+dotenv.config({ path: `.env.${nodeEnv}` });
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
-console.log("Loading environment variables..");
+console.log(`Loading environment variables for NODE_ENV=${nodeEnv}..`);
 
 const envSchema = z.object({
 	GOOGLE_CLOUD_PROJECT_ID: z.string().min(1),
@@ -24,7 +26,7 @@ const envSchema = z.object({
 			if (Number.isNaN(n)) throw new Error("PORT must be a number");
 			return n;
 		}),
-	NODE_ENV: z.string().min(1),
+	NODE_ENV: z.enum(["development", "production"]).default("development"),
 	JWT_SECRET: z.string().min(1),
 	JWT_PUBLIC_KEY: z.string().min(1),
 });
