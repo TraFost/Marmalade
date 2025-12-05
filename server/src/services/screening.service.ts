@@ -2,32 +2,20 @@ import type { NewScreening } from "../libs/db/schemas/screenings.schema";
 import { AppError } from "../libs/helper/error.helper";
 import { ScreeningRepository } from "../repositories/screening.repository";
 
-export type QuickDassInput = {
-	flatJoy: number;
-	motivation: number;
-	physicalAnxiety: number;
-	worry: number;
-	restDifficulty: number;
-	irritability: number;
-};
+import type {
+	QuickDassInput,
+	QuickDassResult,
+	QuickDassSummary,
+	ScreeningRiskAssessment,
+	ScreeningSeverityLevel,
+	ScreeningStepFivePayload,
+	ScreeningStepFourPayload,
+	ScreeningStepOnePayload,
+	ScreeningStepThreePayload,
+	ScreeningStepTwoPayload,
+} from "shared/src/types/screening.type";
 
-export type QuickDassOutput = {
-	depressionScore: number;
-	anxietyScore: number;
-	stressScore: number;
-	depressionLevel: SeverityLevel;
-	anxietyLevel: SeverityLevel;
-	stressLevel: SeverityLevel;
-};
-
-export type SeverityLevel =
-	| "normal"
-	| "mild"
-	| "moderate"
-	| "severe"
-	| "extremely_severe";
-
-export const computeQuickDass = (input: QuickDassInput): QuickDassOutput => {
+export const computeQuickDass = (input: QuickDassInput): QuickDassResult => {
 	const dRaw = input.flatJoy + input.motivation;
 	const aRaw = input.physicalAnxiety + input.worry;
 	const sRaw = input.restDifficulty + input.irritability;
@@ -38,7 +26,7 @@ export const computeQuickDass = (input: QuickDassInput): QuickDassOutput => {
 	const anxietyScore = scale(aRaw);
 	const stressScore = scale(sRaw);
 
-	const levelDep = (score: number): SeverityLevel =>
+	const levelDep = (score: number): ScreeningSeverityLevel =>
 		score <= 9
 			? "normal"
 			: score <= 13
@@ -49,7 +37,7 @@ export const computeQuickDass = (input: QuickDassInput): QuickDassOutput => {
 			? "severe"
 			: "extremely_severe";
 
-	const levelAnx = (score: number): SeverityLevel =>
+	const levelAnx = (score: number): ScreeningSeverityLevel =>
 		score <= 7
 			? "normal"
 			: score <= 9
@@ -60,7 +48,7 @@ export const computeQuickDass = (input: QuickDassInput): QuickDassOutput => {
 			? "severe"
 			: "extremely_severe";
 
-	const levelStress = (score: number): SeverityLevel =>
+	const levelStress = (score: number): ScreeningSeverityLevel =>
 		score <= 14
 			? "normal"
 			: score <= 18
@@ -82,10 +70,10 @@ export const computeQuickDass = (input: QuickDassInput): QuickDassOutput => {
 };
 
 export const computeRiskLevel = (
-	dep: SeverityLevel,
-	anx: SeverityLevel,
-	str: SeverityLevel
-): { risk: "low" | "medium" | "high"; reason: string } => {
+	dep: ScreeningSeverityLevel,
+	anx: ScreeningSeverityLevel,
+	str: ScreeningSeverityLevel
+): ScreeningRiskAssessment => {
 	const levels = [dep, anx, str];
 
 	if (levels.includes("extremely_severe") || levels.includes("severe")) {
@@ -131,10 +119,7 @@ export class ScreeningService {
 		return this.repository.listByUser(userId);
 	}
 
-	async updateStepOne(
-		id: string,
-		payload: { gender: string; ageRange: string }
-	) {
+	async updateStepOne(id: string, payload: ScreeningStepOnePayload) {
 		const screening = await this.requireMutableScreening(id, 1);
 
 		return this.repository.updateById(id, {
@@ -144,14 +129,7 @@ export class ScreeningService {
 		});
 	}
 
-	async updateStepTwo(
-		id: string,
-		payload: {
-			sleepQuality: string;
-			medicationStatus: string;
-			medicationNotes?: string | null;
-		}
-	) {
+	async updateStepTwo(id: string, payload: ScreeningStepTwoPayload) {
 		const screening = await this.requireMutableScreening(id, 2);
 
 		return this.repository.updateById(id, {
@@ -162,10 +140,7 @@ export class ScreeningService {
 		});
 	}
 
-	async updateStepThree(
-		id: string,
-		payload: { happinessScore: number; positiveSources: string[] }
-	) {
+	async updateStepThree(id: string, payload: ScreeningStepThreePayload) {
 		const screening = await this.requireMutableScreening(id, 3);
 
 		return this.repository.updateById(id, {
@@ -175,7 +150,7 @@ export class ScreeningService {
 		});
 	}
 
-	async updateStepFour(id: string, payload: QuickDassInput) {
+	async updateStepFour(id: string, payload: ScreeningStepFourPayload) {
 		const screening = await this.requireMutableScreening(id, 4);
 
 		const dass = computeQuickDass(payload);
@@ -203,13 +178,11 @@ export class ScreeningService {
 			currentStep: Math.max(screening.currentStep ?? 4, 5),
 		});
 
-		return { updated, dassSummary: { ...dass, riskLevel: risk.risk } };
+		const dassSummary: QuickDassSummary = { ...dass, riskLevel: risk.risk };
+		return { updated, dassSummary };
 	}
 
-	async completeStepFive(
-		id: string,
-		payload: { hasSeenPsychologist: boolean; goals: string[] }
-	) {
+	async completeStepFive(id: string, payload: ScreeningStepFivePayload) {
 		const screening = await this.requireMutableScreening(id, 5);
 
 		if (screening.status === "completed") {

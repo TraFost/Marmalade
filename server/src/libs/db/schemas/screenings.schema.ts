@@ -1,58 +1,63 @@
 import {
+	SCREENING_AGE_RANGES,
+	SCREENING_GENDERS,
+	SCREENING_MEDICATION_STATUSES,
+	SCREENING_RISK_LEVELS,
+	SCREENING_SEVERITY_LEVELS,
+	SCREENING_SLEEP_QUALITIES,
+	SCREENING_STATUSES,
+} from "shared/src/types/screening.type";
+
+import {
 	pgTable,
 	uuid,
 	text,
 	integer,
 	timestamp,
 	boolean,
+	pgEnum,
 } from "drizzle-orm/pg-core";
 
 import { users } from "./users.schema";
 
-export const SCREENING_GENDERS = ["male", "female", "other"] as const;
-export const SCREENING_AGE_RANGES = [
-	"16-20",
-	"20-30",
-	"30-40",
-	"40-50",
-	"50-60",
-	"60+",
-] as const;
-export const SCREENING_SLEEP_QUALITIES = [
-	"ideal",
-	"good",
-	"acceptable",
-	"not_enough",
-	"critically_low",
-	"no_sleep_mode",
-] as const;
-export const SCREENING_MEDICATION_STATUSES = [
-	"regular",
-	"sometimes",
-	"none",
-] as const;
-
-export type ScreeningGender = (typeof SCREENING_GENDERS)[number];
-export type ScreeningAgeRange = (typeof SCREENING_AGE_RANGES)[number];
-export type ScreeningSleepQuality = (typeof SCREENING_SLEEP_QUALITIES)[number];
-export type ScreeningMedicationStatus =
-	(typeof SCREENING_MEDICATION_STATUSES)[number];
+const screeningStatusEnum = pgEnum("screening_status", SCREENING_STATUSES);
+const screeningGenderEnum = pgEnum("screening_gender", SCREENING_GENDERS);
+const screeningAgeRangeEnum = pgEnum(
+	"screening_age_range",
+	SCREENING_AGE_RANGES
+);
+const screeningSleepQualityEnum = pgEnum(
+	"screening_sleep_quality",
+	SCREENING_SLEEP_QUALITIES
+);
+const screeningMedicationStatusEnum = pgEnum(
+	"screening_medication_status",
+	SCREENING_MEDICATION_STATUSES
+);
+const screeningSeverityEnum = pgEnum(
+	"screening_severity",
+	SCREENING_SEVERITY_LEVELS
+);
+const screeningRiskLevelEnum = pgEnum(
+	"screening_risk_level",
+	SCREENING_RISK_LEVELS
+);
 
 export const screenings = pgTable("screenings", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	userId: text("user_id")
 		.references(() => users.id, { onDelete: "set null" })
 		.notNull(),
-	status: text("status").notNull().default("in_progress"),
+	status: screeningStatusEnum("status").notNull().default("in_progress"),
 	currentStep: integer("current_step").notNull().default(1),
 	startedAt: timestamp("started_at", { withTimezone: true, mode: "date" })
 		.notNull()
 		.defaultNow(),
 	completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
-	gender: text("gender"),
-	ageRange: text("age_range"),
-	sleepQuality: text("sleep_quality"),
-	medicationStatus: text("medication_status"),
+	gender: screeningGenderEnum("gender"),
+	ageRange: screeningAgeRangeEnum("age_range"),
+	sleepQuality: screeningSleepQualityEnum("sleep_quality"),
+	medicationStatus: screeningMedicationStatusEnum("medication_status"),
 	medicationNotes: text("medication_notes"),
 	happinessScore: integer("happiness_score"),
 	positiveSources: text("positive_sources").array(),
@@ -65,14 +70,33 @@ export const screenings = pgTable("screenings", {
 	dassDepression: integer("dass_depression"),
 	dassAnxiety: integer("dass_anxiety"),
 	dassStress: integer("dass_stress"),
-	dassDepressionLevel: text("dass_depression_level"),
-	dassAnxietyLevel: text("dass_anxiety_level"),
-	dassStressLevel: text("dass_stress_level"),
+	dassDepressionLevel: screeningSeverityEnum("dass_depression_level"),
+	dassAnxietyLevel: screeningSeverityEnum("dass_anxiety_level"),
+	dassStressLevel: screeningSeverityEnum("dass_stress_level"),
 	hasSeenPsychologist: boolean("has_seen_psychologist"),
 	goals: text("goals").array(),
-	riskLevel: text("risk_level"),
+	riskLevel: screeningRiskLevelEnum("risk_level"),
 	riskReason: text("risk_reason"),
 });
 
 export type Screening = typeof screenings.$inferSelect;
 export type NewScreening = typeof screenings.$inferInsert;
+
+export {
+	SCREENING_GENDERS,
+	SCREENING_AGE_RANGES,
+	SCREENING_SLEEP_QUALITIES,
+	SCREENING_MEDICATION_STATUSES,
+	SCREENING_STATUSES,
+	SCREENING_SEVERITY_LEVELS,
+	SCREENING_RISK_LEVELS,
+} from "shared/src/types/screening.type";
+export type {
+	ScreeningGender,
+	ScreeningAgeRange,
+	ScreeningSleepQuality,
+	ScreeningMedicationStatus,
+	ScreeningStatus,
+	ScreeningSeverityLevel,
+	ScreeningRiskLevel,
+} from "shared/src/types/screening.type";
