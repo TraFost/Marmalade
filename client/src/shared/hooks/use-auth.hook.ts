@@ -1,18 +1,32 @@
 import { authClient } from "@/shared/lib/auth/auth.lib";
 
-interface AuthHook {
-	signIn: () => Promise<unknown>;
-}
+import type { AuthSession } from "server/src/configs/auth.config";
+
+type AuthHook = {
+	user: AuthSession | null;
+	loading: boolean;
+	signIn: VoidFunction;
+	logout: VoidFunction;
+};
 
 export const useAuth = (): AuthHook => {
+	const { data, isPending } = authClient.useSession();
+
 	const signIn = async () => {
-		return await authClient.signIn.social({
+		await authClient.signIn.social({
 			provider: "google",
 			callbackURL: `${window.location.origin}/welcome`,
 		});
 	};
 
+	const logout = async () => {
+		await authClient.signOut();
+	};
+
 	return {
+		user: data,
+		loading: isPending,
 		signIn,
+		logout,
 	};
 };
