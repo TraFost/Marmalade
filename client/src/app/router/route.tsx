@@ -1,14 +1,14 @@
 import {
 	createBrowserRouter,
-	Outlet,
 	RouterProvider,
 	type RouteObject,
 } from "react-router";
 
-import { PublicLayout } from "@/shared/components/organisms/layout/public-layout";
-
 import { PUBLIC_PAGES } from "./public.route";
 import { AUTH_PAGES } from "./auth.route";
+import { PRIVATE_PAGES } from "./private.route";
+import { PrivateLayout } from "../layout/private.layout";
+import { AuthLayout } from "../layout/auth.layout";
 
 export interface Page {
 	id: string;
@@ -26,22 +26,19 @@ const createRoute = (option: RouteObject): RouteObject => ({
 const router = createBrowserRouter([
 	{
 		id: "public-root",
-		element: <PublicLayoutRoute />,
 		children: PUBLIC_PAGES.map((p) => createRoute(p)),
 	},
 	{
 		id: "auth-root",
+		element: <AuthLayout />,
 		children: AUTH_PAGES.map((p) => createRoute(p)),
 	},
+	{
+		id: "private-root",
+		element: <PrivateLayout />,
+		children: PRIVATE_PAGES.map((p) => createRoute(p)),
+	},
 ]);
-
-function PublicLayoutRoute() {
-	return (
-		<PublicLayout>
-			<Outlet />
-		</PublicLayout>
-	);
-}
 
 export function AppRouter() {
 	return <RouterProvider router={router} />;
