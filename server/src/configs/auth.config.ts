@@ -6,6 +6,8 @@ import * as schema from "../libs/db/schemas";
 
 import { env } from "../configs/env.config";
 
+const ONE_WEEK_IN_SECONDS = 60 * 60 * 24 * 7;
+
 export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
@@ -13,7 +15,10 @@ export const auth = betterAuth({
 		usePlural: true,
 	}),
 	emailAndPassword: {
-		enabled: false,
+		enabled: true,
+	},
+	session: {
+		expiresIn: ONE_WEEK_IN_SECONDS,
 	},
 	socialProviders: {
 		google: {
