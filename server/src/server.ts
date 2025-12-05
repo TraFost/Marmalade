@@ -8,17 +8,13 @@ import { pinoLogger } from "hono-pino";
 import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
-import authRoute from "./routes/auth.route";
 import screeningsRoute from "./routes/screenings.route";
 
 import { corsConfig } from "./configs/cors.config";
 import { auth } from "./configs/auth.config";
 
 export function createApp() {
-	const api = new Hono()
-		.basePath("/api")
-		.route("/auth", authRoute)
-		.route("/screenings", screeningsRoute);
+	const api = new Hono().basePath("/api").route("/screenings", screeningsRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
@@ -49,7 +45,10 @@ export function createApp() {
 	app.on(
 		["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		"/api/auth/*",
-		(c) => auth.handler(c.req.raw)
+		(c) => {
+			console.log("Better Auth route hit:", c.req.method, c.req.path);
+			return auth.handler(c.req.raw);
+		}
 	);
 
 	app.route("/api", api);
