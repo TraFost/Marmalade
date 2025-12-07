@@ -1,35 +1,72 @@
 ## Marmalade Frontend Instructions
 
-Use this guide whenever you touch the client bundle so we keep the feature-first + atomic structure consistent.
+Use this guide whenever you touch the client bundle to maintain the feature-first + atomic structure. The codebase follows React 19, Vite, Tailwind CSS v4, and shadcn/ui principles for consistency.
+
+### Overview
+
+- **Monorepo Structure**: Client is part of a pnpm workspace with shared types from `shared/`.
+- **Feature-Based Organization**: Each feature (e.g., `welcome`, `home`, `auth`) has its own folder under `src/features/` with `pages/`, `hooks/`, `services/`, and `types/`.
+- **Shared Components**: Reusable UI lives in `src/shared/components/` divided into `atoms/` (primitives like Button), `molecules/` (composites like Navbar), and `organisms/` (full sections like onboarding steps).
+- **Routing**: Uses React Router with layouts (`PublicLayout`, `AuthLayout`, `PrivateLayout`) wrapping feature pages.
+- **Styling**: Tailwind v4 with CSS variables for theming; use `@/` alias for imports.
 
 ### Page Composition
 
-- Keep `src/features/<feature>/pages/*` as _thin shells_ that only orchestrate layout. Never drop raw markup there—import organisms instead.
-- Place reusable UI for a feature under `src/shared/components/{atoms|molecules|organisms}/<feature>/`. Example: the landing page now stitches together `HeroSection`, `AboutSection`, `FeatureSection`, `HowItWorksSection`, `InspirationSection`, `SupportSection`, and `CallToActionSection` from `shared/components/organisms/home/`.
-- When you add a new section to a page, create a new organism in the shared tree, then render it inside the page shell. This keeps routing-focused files small and predictable.
+- Keep `src/features/<feature>/pages/*` as thin shells that orchestrate layout and state. Never add raw markup—import organisms instead.
+- Example: `home.page.tsx` stitches together multiple organisms like `HeroSection`, `AboutSection`, etc., from `shared/components/organisms/home/`.
+- For complex flows like onboarding, the page manages state and validation, delegating UI to step organisms under `shared/components/organisms/onboarding/steps/`.
+- When adding a new page, create it in the feature's `pages/` and ensure it uses shared organisms for reusability.
+
+### Component Hierarchy
+
+- **Atoms**: Basic building blocks (e.g., `Button`, `Input`, `Logo`). Always use these instead of raw HTML elements.
+- **Molecules**: Small composites (e.g., `Navbar`, `Footer`). Combine atoms for common patterns.
+- **Organisms**: Feature-specific sections (e.g., onboarding steps, home sections). These can contain state and logic but should be reusable.
+- Onboarding example: `OnboardingTile` and `OnboardingScaleButton` are primitives in `onboarding-primitives.tsx`, built on top of the `Button` atom for consistent behavior.
 
 ### Icons & Visuals
 
-- Prefer the Phosphor React icon set (`@phosphor-icons/react`) everywhere. No inline SVG blobs—import the icon component and tweak `size`/`weight` props.
-- If an icon does not exist in Phosphor, wrap any custom SVG inside a shared atom (e.g., `IconCat`) and reuse it from there.
+- Prefer `@phosphor-icons/react` for all icons. Import components like `ArrowRightIcon` and adjust `size`/`weight` props.
+- No inline SVGs—wrap custom ones in shared atoms if needed.
+- Example: Onboarding uses `CaretLeftIcon` and `ArrowRightIcon` for navigation.
 
 ### Layout & Routing
 
-- Public pages automatically render inside `PublicLayout` via the router (`app/router/route.tsx`). Do **not** wrap individual page elements with the layout manually.
-- If you need another layout (e.g., for authenticated routes), mirror the same parent-route-with-`Outlet` pattern.
+- Public pages render inside `PublicLayout` via `app/router/route.tsx`. Do not manually wrap pages with layouts.
+- Authenticated routes use `AuthLayout` or `PrivateLayout` with `Outlet` for nested routing.
+- Layouts handle global concerns like headers/footers; pages focus on content.
 
 ### Styling Conventions
 
-- Always use the `@/` alias for imports; no deep relative paths.
-- Stick to Tailwind v4 utilities + CSS variables already defined (e.g., `bg-card`, `text-foreground`). Avoid inline styles unless unavoidable.
-- When composing class names dynamically, use the shared `cn` helper.
-- Use the existing `Button` variants (`primary`, `secondary`, etc.) instead of hand-rolling palette classes. Reserve per-instance classes for layout tweaks (width, spacing, motion) so color/contrast stays consistent.
+- Always use `@/` alias for imports (e.g., `@/shared/components/atoms/button`); no relative paths like `../../../`.
+- Use Tailwind v4 utilities and predefined CSS variables (e.g., `bg-card`, `text-foreground`). Avoid inline styles.
+- For dynamic classes, use the `cn` helper from `@/shared/lib/helper/classname`.
+- Leverage `Button` variants (`primary`, `secondary`, `ghost`, etc.) for consistency. Customize only layout (spacing, size) via `className`.
+- Onboarding primitives override `Button` styles for specific looks while inheriting base behavior.
 
-### Adding New Sections (Example Workflow)
+### Types & Shared Code
 
-1. Create `shared/components/organisms/<feature>/<section>.tsx` with its own copy + layout.
-2. Use atoms/molecules (e.g., `Button`, `Logo`) instead of redefining primitives.
-3. Replace the old markup in the page file with `<SectionComponent />`.
-4. Ensure any lists/map data is colocated inside the organism to keep the page lean.
+- Feature-specific types in `src/features/<feature>/types/`.
+- Shared types (e.g., screening enums) in `shared/src/types/`, imported as `import type { ScreeningGender } from "shared"`.
+- Hooks in `src/shared/hooks/` for cross-feature logic (e.g., `use-auth.hook.ts`).
+- Local hooks in `src/features/<feature>/hooks/` for feature-specific logic.
+- Library code in `src/shared/lib/` (e.g., `api-client/`, `helper/`).
+- Internal Services in `src/features/<feature>/services/` for API calls and business logic.
+- Configs in `src/shared/config/` (e.g., env).
 
-Following the Home page refactor ensures future contributors know exactly where to look and keeps design tokens consistent across the app.
+### Adding New Features/Sections
+
+1. For a new page: Create `src/features/<feature>/pages/new.page.tsx` as a thin shell importing organisms.
+2. For a new organism: Add `src/shared/components/organisms/<feature>/new-section.tsx`, using atoms/molecules and colocating data/logic.
+3. For new atoms/molecules: Place in `src/shared/components/atoms/` or `molecules/`, ensuring they use `cn` and Tailwind.
+4. Update routing in `app/router/` if needed.
+5. Example: Adding an onboarding step involves creating a new step component in `shared/components/organisms/onboarding/steps/`, updating `STEP_DEFINITIONS` in the page, and ensuring types align with shared screening types.
+
+### Best Practices
+
+- Keep components small and focused; prefer composition over large monolithic components.
+- Reuse shared components to maintain consistency.
+- Follow naming conventions: `<feature>-<component-type>.tsx` (e.g., `onboarding-tile.tsx`).
+- Write clear, concise types and leverage shared types wherever possible.
+- Document complex logic in hooks and services for maintainability.
+- Don't use magic numbers or hardcoded strings; use constants or enums from shared types.
