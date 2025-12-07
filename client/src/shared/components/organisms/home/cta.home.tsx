@@ -13,13 +13,13 @@ export function CallToActionSection() {
 				<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
 					<Button
 						variant="primary"
-						className="w-full rounded-full px-10 py-4 text-lg font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
+						className="w-full px-10 py-4 text-lg font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
 					>
 						Begin Session
 					</Button>
 					<Button
 						variant="secondary"
-						className="w-full rounded-full px-8 py-4 text-lg font-medium transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
+						className="w-full px-8 py-4 text-lg font-medium transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
 					>
 						View Demo
 					</Button>
