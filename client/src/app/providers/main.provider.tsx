@@ -1,15 +1,6 @@
 import type { ReactNode } from "react";
-
-import { AppRouter } from "@/app/router/route";
-// import { QueryProvider } from '@/providers/query.provider';
+import { AuthProvider } from "@/shared/contexts/auth.context";
 
 export function AppProviders({ children }: { children: ReactNode }) {
-	return (
-		// <QueryProvider>
-		<>
-			<AppRouter />
-			{children}
-		</>
-		// </QueryProvider>
-	);
+	return <AuthProvider>{children}</AuthProvider>;
 }
