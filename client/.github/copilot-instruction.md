@@ -70,3 +70,11 @@ Use this guide whenever you touch the client bundle to maintain the feature-firs
 - Write clear, concise types and leverage shared types wherever possible.
 - Document complex logic in hooks and services for maintainability.
 - Don't use magic numbers or hardcoded strings; use constants or enums from shared types.
+
+### React Query Services & Hooks (pattern to follow)
+
+- Services live in `src/features/<feature>/services/` (e.g., `api.onboarding.ts`), and should unwrap backend `ResponseWithData` so hooks return clean data shapes.
+- Queries/mutations live in `src/features/<feature>/hooks/` (e.g., `use-query.onboarding.ts`, `use-mutation.onboarding.ts`) and must use the shared `queryKeys` factory (`@/shared/lib/react-query/query-keys.lib.ts`).
+- Every mutation must be optimistic: use `onMutate` to snapshot and update cache, `onError` to roll back, and `onSettled` to call the relevant central invalidation helper (see `invalidations.service.ts`). Keep list + detail caches in sync.
+- Follow the pattern in `.github/hook-example.md` for structure: service functions + hooks in one module, keepPreviousData, enabled flags for dependent queries, infinite query pagination, and cache updates via `queryClient.setQueryData`.
+- For onboarding/screening, mirror the todos pattern: start + step mutations in `use-mutation.onboarding.ts` (optimistic, invalidate detail/history) and detail/history queries in `use-query.onboarding.ts` keyed by `queryKeys.screenings.*`.
