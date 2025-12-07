@@ -9,6 +9,7 @@ import { AUTH_PAGES } from "./auth.route";
 import { PRIVATE_PAGES } from "./private.route";
 import { PrivateLayout } from "../layout/private.layout";
 import { AuthLayout } from "../layout/auth.layout";
+import { PublicLayout } from "../layout/public.layout";
 
 export interface Page {
 	id: string;
@@ -26,6 +27,7 @@ const createRoute = (option: RouteObject): RouteObject => ({
 const router = createBrowserRouter([
 	{
 		id: "public-root",
+		element: <PublicLayout />,
 		children: PUBLIC_PAGES.map((p) => createRoute(p)),
 	},
 	{
