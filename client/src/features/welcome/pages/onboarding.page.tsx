@@ -10,6 +10,15 @@ import { PhysicalHealthStep } from "@/shared/components/organisms/onboarding/ste
 import { SelfAnalysisStep } from "@/shared/components/organisms/onboarding/steps/self-analysis.step";
 import { SpecialistPreferencesStep } from "@/shared/components/organisms/onboarding/steps/specialist-preferences.step";
 import { StepIndicatorList } from "@/shared/components/organisms/onboarding/steps/indicator.step";
+import {
+	useCompleteScreening,
+	useStartScreening,
+	useUpdateScreeningStepFour,
+	useUpdateScreeningStepOne,
+	useUpdateScreeningStepThree,
+	useUpdateScreeningStepTwo,
+} from "@/features/welcome/hooks/use-mutation.onboarding";
+import { useAuth } from "@/shared/hooks/use-auth.hook";
 
 import type {
 	OnboardingFormData,
@@ -80,15 +89,39 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 const TOTAL_STEPS = STEP_DEFINITIONS.length;
 
 export function OnboardingPage() {
+	const { user } = useAuth();
 	const [currentStep, setCurrentStep] = useState(0);
 	const [formData, setFormData] =
 		useState<OnboardingFormData>(INITIAL_FORM_DATA);
 	const [formFilled, setFormFilled] = useState(false);
+	const [screeningId, setScreeningId] = useState<string | null>(null);
 
 	const stepConfig = STEP_DEFINITIONS[currentStep];
 	const StepComponent = stepConfig.component;
 	const canProceed = stepConfig.validate(formData);
 	const isLastStep = currentStep === TOTAL_STEPS - 1;
+
+	const startMutation = useStartScreening(user?.user?.id);
+	const stepOneMutation = useUpdateScreeningStepOne({
+		screeningId: screeningId || "",
+		userId: user?.user?.id,
+	});
+	const stepTwoMutation = useUpdateScreeningStepTwo({
+		screeningId: screeningId || "",
+		userId: user?.user?.id,
+	});
+	const stepThreeMutation = useUpdateScreeningStepThree({
+		screeningId: screeningId || "",
+		userId: user?.user?.id,
+	});
+	const stepFourMutation = useUpdateScreeningStepFour({
+		screeningId: screeningId || "",
+		userId: user?.user?.id,
+	});
+	const completeMutation = useCompleteScreening({
+		screeningId: screeningId || "",
+		userId: user?.user?.id,
+	});
 
 	const progressPercent = useMemo(
 		() => ((currentStep + 1) / TOTAL_STEPS) * 100,
@@ -129,8 +162,60 @@ export function OnboardingPage() {
 		setFormFilled(false);
 	};
 
-	const handleNext = () => {
+	console.log(screeningId, "id");
+
+	const persistStep = async () => {
+		if (!screeningId) {
+			const started = await startMutation.mutateAsync();
+			setScreeningId(started.id);
+			return;
+		}
+
+		switch (currentStep + 1) {
+			case 1:
+				await stepOneMutation.mutateAsync({
+					gender: formData.gender!,
+					ageRange: formData.ageRange!,
+				});
+				return;
+			case 2:
+				await stepTwoMutation.mutateAsync({
+					sleepQuality: formData.sleepQuality!,
+					medicationStatus: formData.medicationStatus!,
+					medicationNotes: formData.medicationNotes || null,
+				});
+				return;
+			case 3:
+				await stepThreeMutation.mutateAsync({
+					happinessScore: formData.happinessScore!,
+					positiveSources: formData.positiveSources,
+				});
+				return;
+			case 4:
+				await stepFourMutation.mutateAsync({
+					flatJoy: formData.dassScores.flatJoy!,
+					motivation: formData.dassScores.motivation!,
+					physicalAnxiety: formData.dassScores.physicalAnxiety!,
+					worry: formData.dassScores.worry!,
+					restDifficulty: formData.dassScores.restDifficulty!,
+					irritability: formData.dassScores.irritability!,
+				});
+				return;
+			case 5:
+				await completeMutation.mutateAsync({
+					hasSeenPsychologist: Boolean(formData.hasSeenPsychologist),
+					goals: formData.goals,
+				});
+				return;
+			default:
+				return;
+		}
+	};
+
+	const handleNext = async () => {
 		if (!canProceed) return;
+
+		await persistStep();
 
 		if (isLastStep) {
 			setFormFilled(true);
