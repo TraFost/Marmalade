@@ -11,7 +11,6 @@ export const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
-	// Replace with your real token retrieval (e.g., from auth context or storage)
 	const token = localStorage.getItem("auth_token");
 	if (token) {
 		config.headers.Authorization = `Bearer ${token}`;
