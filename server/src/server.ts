@@ -14,7 +14,7 @@ import { corsConfig } from "./configs/cors.config";
 import { auth } from "./configs/auth.config";
 
 export function createApp() {
-	const api = new Hono().basePath("/api").route("/screenings", screeningsRoute);
+	const api = new Hono().route("/screenings", screeningsRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
