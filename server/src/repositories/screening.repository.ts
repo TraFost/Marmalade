@@ -40,4 +40,16 @@ export class ScreeningRepository {
 			.orderBy(desc(screenings.startedAt));
 		return rows as ScreeningRecord[];
 	}
+
+	async findLatestCompletedByUser(
+		userId: string
+	): Promise<ScreeningRecord | null> {
+		const [record] = await db
+			.select()
+			.from(screenings)
+			.where(eq(screenings.userId, userId))
+			.orderBy(desc(screenings.completedAt), desc(screenings.startedAt))
+			.limit(1);
+		return (record ?? null) as ScreeningRecord | null;
+	}
 }
