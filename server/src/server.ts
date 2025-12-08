@@ -9,12 +9,18 @@ import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
 import screeningsRoute from "./routes/screenings.route";
+import sessionsRoute from "./routes/sessions.route";
+import messagesRoute from "./routes/messages.route";
+import hooksRoute from "./routes/hooks.route";
 
 import { corsConfig } from "./configs/cors.config";
 import { auth } from "./configs/auth.config";
 
 export function createApp() {
-	const api = new Hono().route("/screenings", screeningsRoute);
+	const api = new Hono()
+		.route("/screenings", screeningsRoute)
+		.route("/sessions", sessionsRoute)
+		.route("/messages", messagesRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
@@ -52,6 +58,7 @@ export function createApp() {
 	);
 
 	app.route("/api", api);
+	app.route("/hooks", hooksRoute);
 
 	return app;
 }

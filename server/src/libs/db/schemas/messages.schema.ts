@@ -1,0 +1,43 @@
+import {
+	jsonb,
+	pgEnum,
+	pgTable,
+	smallint,
+	text,
+	timestamp,
+	uuid,
+} from "drizzle-orm/pg-core";
+
+import { users } from "./users.schema";
+import { voiceSessions } from "./voice-sessions.schema";
+
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
+export const voiceModeEnum = pgEnum("voice_mode", [
+	"comfort",
+	"coach",
+	"educational",
+	"crisis",
+]);
+
+export const messages = pgTable("messages", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	userId: text("user_id")
+		.references(() => users.id, { onDelete: "cascade" })
+		.notNull(),
+	sessionId: uuid("session_id")
+		.references(() => voiceSessions.id, { onDelete: "cascade" })
+		.notNull(),
+	role: messageRoleEnum("role").notNull(),
+	content: text("content").notNull(),
+	rawAudioRef: text("raw_audio_ref"),
+	metadata: jsonb("metadata"),
+	voiceMode: voiceModeEnum("voice_mode"),
+	riskAtTurn: smallint("risk_at_turn").default(0).notNull(),
+	themes: text("themes").array(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+		.defaultNow()
+		.notNull(),
+});
+
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
