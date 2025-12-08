@@ -173,3 +173,24 @@ export type ScreeningRecord = {
 	riskLevel: ScreeningRiskLevel | null;
 	riskReason: string | null;
 };
+
+export type ScreeningSummary = {
+	riskLevel: ScreeningRiskLevel | null;
+	dass: {
+		depressionScore: number | null;
+		anxietyScore: number | null;
+		stressScore: number | null;
+		depressionLevel: ScreeningSeverityLevel | null;
+		anxietyLevel: ScreeningSeverityLevel | null;
+		stressLevel: ScreeningSeverityLevel | null;
+	};
+	wellbeing: {
+		sleepQuality: ScreeningSleepQuality | null;
+		happinessScore: number | null;
+	};
+	profile: {
+		gender: ScreeningGender | null;
+		ageRange: ScreeningAgeRange | null;
+		goals: string[];
+	};
+};
