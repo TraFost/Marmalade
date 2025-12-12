@@ -1,4 +1,11 @@
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uuid,
+	vector,
+} from "drizzle-orm/pg-core";
 
 import { users } from "./users.schema";
 
@@ -15,7 +22,7 @@ export const userMemoryDocs = pgTable("user_memory_docs", {
 		.notNull(),
 	content: text("content").notNull(),
 	type: memoryDocTypeEnum("type").notNull(),
-	embedding: text("embedding"),
+	embedding: vector("embedding", { dimensions: 768 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
 		.defaultNow()
 		.notNull(),
