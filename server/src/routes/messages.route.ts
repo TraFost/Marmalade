@@ -62,48 +62,60 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 		} catch (error) {
 			return handleError(c, error);
 		}
-	});
+	})
 
 	.get("/events", async (c) => {
-        try {
-            const user = c.get("user");
-            const sessionId = c.req.query("sessionId") as string | undefined;
-            if (!sessionId) return c.json({ message: "sessionId required" }, 400);
+		try {
+			const sessionId = c.req.query("sessionId") as string | undefined;
+			if (!sessionId) return c.json({ message: "sessionId required" }, 400);
 
-            const { getEmitter, deleteEmitter } = await import("../libs/events/event-bus");
-            const emitter = getEmitter(sessionId);
+			const { getEmitter, maybeDeleteIfUnused } = await import(
+				"../libs/events/event-bus"
+			);
 
-            const stream = new ReadableStream({
-                start(controller) {
-                    const onData = (data: any) => {
-                        const s = `event: phase\ndata: ${JSON.stringify(data)}\n\n`;
-                        controller.enqueue(new TextEncoder().encode(s));
-                    };
+			const emitter = getEmitter(sessionId);
 
-                    const onEnd = () => {
-                        const s = `event: end\ndata: {}\n\n`;
-                        controller.enqueue(new TextEncoder().encode(s));
-                        controller.close();
-                    };
+			let onData: ((data: any) => void) | undefined;
+			let onEnd: (() => void) | undefined;
 
-                    emitter.on("phase", onData);
-                    emitter.once("end", onEnd);
+			const stream = new ReadableStream({
+				start(controller) {
+					onData = (data: any) => {
+						const s = `event: phase\ndata: ${JSON.stringify(data)}\n\n`;
+						controller.enqueue(new TextEncoder().encode(s));
+					};
 
-                    controller.enqueue(new TextEncoder().encode("event: open\ndata: {}\n\n"));
-                },
-                cancel() {},
-            });
+					onEnd = () => {
+						const s = `event: end\ndata: {}\n\n`;
+						controller.enqueue(new TextEncoder().encode(s));
+						controller.close();
+						maybeDeleteIfUnused(sessionId);
+					};
 
-            return new Response(stream, {
-                headers: {
-                    "Content-Type": "text/event-stream",
-                    "Cache-Control": "no-cache",
-                    Connection: "keep-alive",
-                },
-            });
-        } catch (error) {
-            return handleError(c, error);
-        }
-    });
+					emitter.on("phase", onData!);
+					emitter.once("end", onEnd!);
+
+					controller.enqueue(
+						new TextEncoder().encode("event: open\ndata: {}\n\n")
+					);
+				},
+				cancel() {
+					emitter.off("phase", onData!);
+					emitter.off("end", onEnd!);
+					maybeDeleteIfUnused(sessionId);
+				},
+			});
+
+			return new Response(stream, {
+				headers: {
+					"Content-Type": "text/event-stream",
+					"Cache-Control": "no-cache",
+					Connection: "keep-alive",
+				},
+			});
+		} catch (error) {
+			return handleError(c, error);
+		}
+	});
 
 export default messagesRoute;

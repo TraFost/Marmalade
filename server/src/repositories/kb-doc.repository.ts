@@ -11,7 +11,7 @@ export class KbDocRepository {
 		limit = 5,
 		client: DBClient = db
 	) {
-		const vectorLiteral = sql.raw(`'[${embedding.join(",")} ]'::vector`);
+		const vectorLiteral = sql.raw(`'[${embedding.join(",")}]'::vector`);
 		const distance = sql<number>`(${kbDocs.embedding} <=> ${vectorLiteral})`;
 
 		const rows = await client

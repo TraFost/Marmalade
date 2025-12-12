@@ -9,7 +9,7 @@ import { VoiceSessionRepository } from "../repositories/voice-session.repository
 import { RiskLogRepository } from "../repositories/risk-log.repository";
 import { MemoryDocRepository } from "../repositories/memory-doc.repository";
 import { messages } from "../libs/db/schemas/messages.schema";
-import { getEmitter, deleteEmitter } from "../libs/events/event-bus";
+import { getEmitter } from "../libs/events/event-bus";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../libs/db/db.lib";
 import type { ScreeningSummary } from "shared/src/types/screening.type";
@@ -212,7 +212,6 @@ export class ConversationService {
 
 		emitter.emit("phase", { phase: "reply" });
 		emitter.emit("end");
-		deleteEmitter(session.id);
 
 		return {
 			replyText: counselor.replyText,

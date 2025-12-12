@@ -62,22 +62,22 @@ export class SessionService {
 		dassStressLevel?: string | null;
 	}): ScreeningSummary {
 		return {
-			riskLevel: screening.riskLevel ?? null,
+			riskLevel: (screening.riskLevel as any) ?? null,
 			dass: {
 				depressionScore: screening.dassDepression ?? null,
 				anxietyScore: screening.dassAnxiety ?? null,
 				stressScore: screening.dassStress ?? null,
-				depressionLevel: screening.dassDepressionLevel ?? null,
-				anxietyLevel: screening.dassAnxietyLevel ?? null,
-				stressLevel: screening.dassStressLevel ?? null,
+				depressionLevel: (screening.dassDepressionLevel as any) ?? null,
+				anxietyLevel: (screening.dassAnxietyLevel as any) ?? null,
+				stressLevel: (screening.dassStressLevel as any) ?? null,
 			},
 			wellbeing: {
-				sleepQuality: screening.sleepQuality ?? null,
+				sleepQuality: (screening.sleepQuality as any) ?? null,
 				happinessScore: screening.happinessScore ?? null,
 			},
 			profile: {
-				gender: screening.gender ?? null,
-				ageRange: screening.ageRange ?? null,
+				gender: (screening.gender as any) ?? null,
+				ageRange: (screening.ageRange as any) ?? null,
 				goals: screening.goals ?? [],
 			},
 		};
