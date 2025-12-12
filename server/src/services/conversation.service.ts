@@ -9,6 +9,7 @@ import { VoiceSessionRepository } from "../repositories/voice-session.repository
 import { RiskLogRepository } from "../repositories/risk-log.repository";
 import { MemoryDocRepository } from "../repositories/memory-doc.repository";
 import { messages } from "../libs/db/schemas/messages.schema";
+import { getEmitter, deleteEmitter } from "../libs/events/event-bus";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../libs/db/db.lib";
 import type { ScreeningSummary } from "shared/src/types/screening.type";
@@ -77,12 +78,14 @@ export class ConversationService {
 			preferences: null,
 		};
 
+		const emitter = getEmitter(session.id);
 		const retrievePromise = this.embeddingRepo.findRelevant(
 			userId,
 			userMessage,
 			5
 		);
 
+		emitter.emit("phase", { phase: "analyzing" });
 		const mini = await this.miniBrain.analyzeTurn({
 			userMessage,
 			recentMessages: recent
@@ -110,11 +113,13 @@ export class ConversationService {
 
 		const mood = normalizeMood(mini.mood);
 
+		emitter.emit("phase", { phase: "recalling" });
 		const safetyMode = this.getSafetyMode(mini.riskLevel);
 		const relevant = await retrievePromise;
 
 		const isHighRisk = mini.riskLevel > 3;
 
+		emitter.emit("phase", { phase: "formulating" });
 		const counselor = isHighRisk
 			? {
 					replyText:
@@ -204,6 +209,10 @@ export class ConversationService {
 
 			await this.sessions.incrementMessageCount(sessionId, 1, tx);
 		});
+
+		emitter.emit("phase", { phase: "reply" });
+		emitter.emit("end");
+		deleteEmitter(session.id);
 
 		return {
 			replyText: counselor.replyText,

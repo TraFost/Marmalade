@@ -64,4 +64,46 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 		}
 	});
 
+	.get("/events", async (c) => {
+        try {
+            const user = c.get("user");
+            const sessionId = c.req.query("sessionId") as string | undefined;
+            if (!sessionId) return c.json({ message: "sessionId required" }, 400);
+
+            const { getEmitter, deleteEmitter } = await import("../libs/events/event-bus");
+            const emitter = getEmitter(sessionId);
+
+            const stream = new ReadableStream({
+                start(controller) {
+                    const onData = (data: any) => {
+                        const s = `event: phase\ndata: ${JSON.stringify(data)}\n\n`;
+                        controller.enqueue(new TextEncoder().encode(s));
+                    };
+
+                    const onEnd = () => {
+                        const s = `event: end\ndata: {}\n\n`;
+                        controller.enqueue(new TextEncoder().encode(s));
+                        controller.close();
+                    };
+
+                    emitter.on("phase", onData);
+                    emitter.once("end", onEnd);
+
+                    controller.enqueue(new TextEncoder().encode("event: open\ndata: {}\n\n"));
+                },
+                cancel() {},
+            });
+
+            return new Response(stream, {
+                headers: {
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    Connection: "keep-alive",
+                },
+            });
+        } catch (error) {
+            return handleError(c, error);
+        }
+    });
+
 export default messagesRoute;
