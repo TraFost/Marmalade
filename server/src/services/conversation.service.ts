@@ -1,6 +1,7 @@
 import { MiniBrainClient } from "../libs/ai/mini-brain.client";
 import { CounselorBrainClient } from "../libs/ai/counselor-brain.client";
 import { EmbeddingClient } from "../libs/ai/embedding.client";
+import { EmbeddingRepository } from "../repositories/embedding.repository";
 import { AppError } from "../libs/helper/error.helper";
 import { MessageRepository } from "../repositories/message.repository";
 import { ConversationStateRepository } from "../repositories/conversation-state.repository";
@@ -39,7 +40,8 @@ const normalizeMood = (mood: string): AllowedMood =>
 export class ConversationService {
 	private miniBrain = new MiniBrainClient();
 	private counselorBrain = new CounselorBrainClient();
-	private embedding = new EmbeddingClient();
+	private embeddingClient = new EmbeddingClient();
+	private embeddingRepo = new EmbeddingRepository();
 	private messages = new MessageRepository();
 	private states = new ConversationStateRepository();
 	private sessions = new VoiceSessionRepository();
@@ -75,12 +77,11 @@ export class ConversationService {
 			preferences: null,
 		};
 
-		const retrievePromise = this.embedding.retrieveRelevant({
+		const retrievePromise = this.embeddingRepo.findRelevant(
 			userId,
 			userMessage,
-			themes: conversationState.lastThemes ?? [],
-			summary: conversationState.summary,
-		});
+			5
+		);
 
 		const mini = await this.miniBrain.analyzeTurn({
 			userMessage,
@@ -251,7 +252,7 @@ export class ConversationService {
 			2
 		);
 
-		const embedding = await this.embedding.embed(summaryContent);
+		const embedding = await this.embeddingClient.embed(summaryContent);
 		const doc = await this.memoryDocs.create(
 			{
 				userId,

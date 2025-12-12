@@ -1,7 +1,6 @@
 import { GoogleAuth } from "google-auth-library";
 
 import { env } from "../../configs/env.config";
-import { MemoryDocRepository } from "../../repositories/memory-doc.repository";
 
 export type EmbeddingQuery = {
 	userId: string;
@@ -10,47 +9,10 @@ export type EmbeddingQuery = {
 	summary?: string | null;
 };
 
-export type RetrievedDoc = {
-	source: "memory" | "kb";
-	content: string;
-	type?: string | null;
-	distance?: number | null;
-};
-
 export class EmbeddingClient {
 	private auth = new GoogleAuth({
 		scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 	});
-	private memories = new MemoryDocRepository();
-
-	async retrieveRelevant(input: EmbeddingQuery): Promise<RetrievedDoc[]> {
-		try {
-			const text = [
-				input.userMessage,
-				(input.summary ?? "").slice(0, 400),
-				(input.themes ?? []).join(", "),
-			]
-				.filter(Boolean)
-				.join("\n");
-
-			const queryEmbedding = await this.embed(text);
-			const memoryHits = await this.memories.findRelevantByEmbedding(
-				input.userId,
-				queryEmbedding,
-				5
-			);
-
-			return memoryHits.map((hit) => ({
-				source: "memory",
-				content: hit.content,
-				type: hit.type,
-				distance: hit.distance,
-			}));
-		} catch (error) {
-			console.error("Embedding retrieveRelevant failed", error);
-			return [];
-		}
-	}
 
 	async embed(text: string): Promise<number[]> {
 		const client = await this.auth.getClient();
