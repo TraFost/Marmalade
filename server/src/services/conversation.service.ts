@@ -25,6 +25,12 @@ const allowedMoods = [
 ] as const;
 type AllowedMood = (typeof allowedMoods)[number];
 
+const EMERGENCY_PACKET = {
+	replyText:
+		"I'm sensing a connection issue, but I'm still listening. Could you repeat that?",
+	voiceMode: "comfort" as const,
+};
+
 const normalizeMood = (mood: string): AllowedMood =>
 	(allowedMoods as readonly string[]).includes(mood)
 		? (mood as AllowedMood)
@@ -69,6 +75,13 @@ export class ConversationService {
 			preferences: null,
 		};
 
+		const retrievePromise = this.embedding.retrieveRelevant({
+			userId,
+			userMessage,
+			themes: conversationState.lastThemes ?? [],
+			summary: conversationState.summary,
+		});
+
 		const mini = await this.miniBrain.analyzeTurn({
 			userMessage,
 			recentMessages: recent
@@ -97,35 +110,47 @@ export class ConversationService {
 		const mood = normalizeMood(mini.mood);
 
 		const safetyMode = this.getSafetyMode(mini.riskLevel);
-		const relevant = await this.embedding.retrieveRelevant({
-			userMessage,
-			themes: mini.themes,
-			summary: nextSummary,
-		});
+		const relevant = await retrievePromise;
 
-		const counselor = await this.counselorBrain.generateReply({
-			conversationWindow: recent
-				.slice()
-				.reverse()
-				.map((m) => ({ role: m.role, content: m.content })),
-			summary: nextSummary,
-			mood: mini.mood,
-			riskLevel: mini.riskLevel,
-			themes: mini.themes,
-			safetyMode,
-			relevantDocs: relevant,
-			baseline: {
-				depression: conversationState.baselineDepression,
-				anxiety: conversationState.baselineAnxiety,
-				stress: conversationState.baselineStress,
-			},
-			preferences: {
-				...((conversationState.preferences ?? {}) as Record<string, unknown>),
-				screeningSummary: this.pickScreeningSummary(
-					conversationState.preferences
-				),
-			},
-		});
+		const isHighRisk = mini.riskLevel > 3;
+
+		const counselor = isHighRisk
+			? {
+					replyText:
+						"I want to make sure you're safe. Let's slow down and focus on immediate support. Would you like to reach out to someone you trust right now?",
+					voiceMode: "crisis" as const,
+					suggestedExercise: "box_breathing",
+					tags: ["safety_override"],
+			  }
+			: await this.withTimeout(
+					this.counselorBrain.generateReply({
+						conversationWindow: recent
+							.slice()
+							.reverse()
+							.map((m) => ({ role: m.role, content: m.content })),
+						summary: nextSummary,
+						mood: mini.mood,
+						riskLevel: mini.riskLevel,
+						themes: mini.themes,
+						safetyMode,
+						relevantDocs: relevant,
+						baseline: {
+							depression: conversationState.baselineDepression,
+							anxiety: conversationState.baselineAnxiety,
+							stress: conversationState.baselineStress,
+						},
+						preferences: {
+							...((conversationState.preferences ?? {}) as Record<
+								string,
+								unknown
+							>),
+							screeningSummary: this.pickScreeningSummary(
+								conversationState.preferences
+							),
+						},
+					}),
+					4000
+			  );
 
 		const voiceMode = safetyMode === "crisis" ? "crisis" : counselor.voiceMode;
 
@@ -226,11 +251,13 @@ export class ConversationService {
 			2
 		);
 
+		const embedding = await this.embedding.embed(summaryContent);
 		const doc = await this.memoryDocs.create(
 			{
 				userId,
 				content: summaryContent,
 				type: "session_summary",
+				embedding,
 			},
 			client
 		);
@@ -247,5 +274,21 @@ export class ConversationService {
 		if (risk === 3) return "high_caution";
 		if (risk === 2) return "caution";
 		return "normal";
+	}
+
+	private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+		let timeoutHandle: NodeJS.Timeout | null = null;
+		const timeoutPromise = new Promise<T>((resolve) => {
+			timeoutHandle = setTimeout(() => resolve(EMERGENCY_PACKET as T), ms);
+		});
+
+		try {
+			return await Promise.race([promise, timeoutPromise]);
+		} catch (error) {
+			console.error("CounselorBrain failed, using emergency packet", error);
+			return EMERGENCY_PACKET as T;
+		} finally {
+			if (timeoutHandle) clearTimeout(timeoutHandle);
+		}
 	}
 }
