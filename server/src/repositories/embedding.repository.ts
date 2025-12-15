@@ -1,6 +1,7 @@
 import { EmbeddingClient } from "../libs/ai/embedding.client";
 import { MemoryDocRepository } from "./memory-doc.repository";
-import { KbDocRepository } from "./kb-doc.repository";
+import { KbDocRepository, type KbSearchFilter } from "./kb-doc.repository";
+import { db } from "../libs/db/db.lib";
 
 export type RetrievedDoc = {
 	source: "memory" | "kb";
@@ -10,6 +11,8 @@ export type RetrievedDoc = {
 	distance?: number | null;
 	title?: string | null;
 	topic?: string | null;
+	tags?: string[] | null;
+	severity?: number | null;
 };
 
 export class EmbeddingRepository {
@@ -17,16 +20,40 @@ export class EmbeddingRepository {
 	private memories = new MemoryDocRepository();
 	private kbs = new KbDocRepository();
 
-	async findRelevant(userId: string, text: string, limit = 5) {
+	private SEARCH_BUFFER_MULTIPLIER = 2;
+
+	async findRelevant(
+		userId: string,
+		text: string,
+		limit = 5,
+		filter?: KbSearchFilter,
+		client = db
+	) {
 		const embedding = await this.embedder.embed(text);
+
+		const searchBuffer = limit * this.SEARCH_BUFFER_MULTIPLIER;
+
 		const [memoryHits, kbHits] = await Promise.all([
-			this.memories.findRelevantByEmbedding(userId, embedding, limit),
-			this.kbs.findRelevantByEmbedding(embedding, limit),
+			this.memories.findRelevantByEmbedding(
+				userId,
+				embedding,
+				searchBuffer,
+				client
+			),
+			this.kbs.findRelevantByEmbedding(embedding, searchBuffer, filter, client),
 		]);
 
-		const combined = [
-			...memoryHits.map((m) => ({ ...m, source: "memory" as const })),
-			...kbHits.map((k) => ({ ...k, source: "kb" as const })),
+		const combined: RetrievedDoc[] = [
+			...memoryHits.map((m) => ({
+				...m,
+				source: "memory" as const,
+			})),
+			...kbHits.map((k) => ({
+				...k,
+				source: "kb" as const,
+				tags: k.tags,
+				minSeverity: k.minSeverity,
+			})),
 		];
 
 		combined.sort((a, b) => {
