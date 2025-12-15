@@ -3,11 +3,10 @@ import { Hono } from "hono";
 import { elevenLabsTurnSchema } from "./validators/hooks.validator";
 import { verifyElevenLabsSignature } from "../libs/helper/elevenlabs.helper";
 import { env } from "../configs/env.config";
-import { handleError, AppError } from "../libs/helper/error.helper";
+import { AppError } from "../libs/helper/error.helper";
 import { MessageRepository } from "../repositories/message.repository";
 import { SessionService } from "../services/session.service";
 import { ConversationService } from "../services/conversation.service";
-import { successWithData } from "../libs/helper/response.helper";
 import { db } from "../libs/db/db.lib";
 import type { ElevenLabsTurnWebhookPayload } from "shared/src/types/webhook.type";
 
@@ -15,7 +14,7 @@ const messageRepo = new MessageRepository();
 const sessionService = new SessionService();
 const conversationService = new ConversationService();
 
-const hooksRoute = new Hono().post("/elevenlabs-turn", async (c) => {
+const hooksRoute = new Hono().post("/chat/completions", async (c) => {
 	try {
 		const signature = c.req.header("x-elevenlabs-signature") ?? null;
 		const rawBody = await c.req.text();
@@ -62,18 +61,36 @@ const hooksRoute = new Hono().post("/elevenlabs-turn", async (c) => {
 			payload.transcript
 		);
 
+		return c.json({
+			id: "chatcmpl-" + Date.now(),
+			object: "chat.completion",
+			created: Math.floor(Date.now() / 1000),
+			model: "marmalade-backend",
+			choices: [
+				{
+					index: 0,
+					message: {
+						role: "assistant",
+						content: turn.replyText,
+					},
+					finish_reason: "stop",
+				},
+			],
+		});
+	} catch (error) {
+		console.error("CRITICAL TURN ERROR:", error);
+
 		return c.json(
-			successWithData("Turn processed", {
-				sessionId: session.id,
-				replyText: turn.replyText,
-				voiceMode: turn.voiceMode,
-				mood: turn.mood,
-				riskLevel: turn.riskLevel,
-			}),
+			{
+				response:
+					"I... I lost my train of thought for a moment. Could you tell me that one more time?",
+				metadata: {
+					error: true,
+					voice_mode: "confused",
+				},
+			},
 			200
 		);
-	} catch (error) {
-		return handleError(c, error);
 	}
 });
 
