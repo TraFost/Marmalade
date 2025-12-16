@@ -78,6 +78,39 @@ export class CounselorBrainClient {
 		return counselorResponseSchema.parse(parsed);
 	}
 
+	async *generateReplyTextStream(
+		input: CounselorBrainInput
+	): AsyncGenerator<string, void, void> {
+		const model = this.vertex.getGenerativeModel({
+			model: env.VERTEX_COUNSELOR_MODEL,
+			systemInstruction: {
+				parts: [{ text: input.systemInstruction }],
+				role: "system",
+			},
+			generationConfig: {
+				temperature: 0.7,
+			},
+		});
+
+		const prompt = this.buildStreamingPrompt(input);
+
+		const res: any = await model.generateContentStream({
+			contents: [
+				{
+					role: "user",
+					parts: [{ text: prompt }],
+				},
+			],
+		});
+
+		for await (const chunk of res.stream) {
+			const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+			if (text) {
+				yield text;
+			}
+		}
+	}
+
 	private buildContextPrompt(input: CounselorBrainInput): string {
 		const recent = input.conversationWindow.slice(-12);
 		const docContext = (input.relevantDocs ?? []).map((d) => ({
@@ -118,6 +151,35 @@ export class CounselorBrainClient {
 				null,
 				2
 			),
+		].join("\n\n");
+	}
+
+	private buildStreamingPrompt(input: CounselorBrainInput): string {
+		const recent = input.conversationWindow.slice(-12);
+		const docContext = (input.relevantDocs ?? []).map((d) => ({
+			source: d.source,
+			content: d.content?.slice(0, 800),
+			type: d.type,
+		}));
+
+		return [
+			"Generate a spoken, TTS-friendly response.",
+			"IMPORTANT: Output ONLY the raw spoken text.",
+			"Do NOT include JSON, headers, or labels like 'VOICE_MODE:'.",
+			"Do NOT output markdown (bold, italics).",
+
+			"--- CONTEXT DATA ---",
+			`User Summary: ${input.summary ?? "None"}`,
+			`Current Mood: ${input.mood ?? "unknown"}`,
+			`Risk Level: ${input.riskLevel} (Safety Mode: ${input.safetyMode})`,
+			`Themes: ${JSON.stringify(input.themes)}`,
+			`Baseline Stats: ${JSON.stringify(input.baseline ?? {})}`,
+
+			"--- KNOWLEDGE BASE ---",
+			docContext.length > 0 ? JSON.stringify(docContext) : "No relevant docs.",
+
+			"--- RECENT CONVERSATION ---",
+			JSON.stringify(recent),
 		].join("\n\n");
 	}
 }

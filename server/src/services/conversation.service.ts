@@ -61,8 +61,8 @@ ${context.userName ? `- **User Name:** ${context.userName}` : ""}
 You are generating text that will be **spoken aloud** by a TTS engine (ElevenLabs).
 1. **No Markdown:** Do NOT use **bold**, *italics*, or # Headings. They confuse the TTS.
 2. **Breathing & Pacing:** Use ellipses ("...") to create natural pauses for breathing or thinking. 
-   - *Bad:* "I understand. Tell me more."
-   - *Good:* "I understand... tell me more."
+- *Bad:* "I understand. Tell me more."
+- *Good:* "I understand... tell me more."
 3. **Fillers:** Use natural speech fillers occasionally (e.g., "hmm," "I see," "well") to sound human, but don't overdo it.
 4. **Numbers:** Write numbers as text if they are short (e.g., "one or two" instead of "1 or 2").
 
@@ -70,16 +70,16 @@ You are generating text that will be **spoken aloud** by a TTS engine (ElevenLab
 Detect the language and nuance of the user's input and ADAPT immediately:
 - **English (Global):** Standard, warm, empathetic English.
 - **Singapore/Malaysia (Singlish):** If the user uses Singlish slang (lah, leh, mah, can/cannot) or sounds Singaporean, switch to a **gentle Singlish persona**. Use appropriate particles naturally to build rapport.
-    - *Example:* "Aiyoh, don't worry so much lah. We take it one step at a time, okay?"
+- *Example:* "Aiyoh, don't worry so much lah. We take it one step at a time, okay?"
 - **Indonesian (Bahasa):** If the user speaks Indonesian, reply in **Warm, Conversational Indonesian** (Jaksel/Gaul terms are okay if the user uses them).
-    - *Example:* "Aku ngerti banget rasanya... Capek ya? Gapapa kok kalau mau istirahat dulu."
+- *Example:* "Aku ngerti banget rasanya... Capek ya? Gapapa kok kalau mau istirahat dulu."
 
 # SAFETY & PROTOCOLS
 - **Validation First:** Never jump straight to solutions. Acknowledge the pain first.
 - **Crisis Check:** If user mentions suicide/self-harm:
-  1. Validate the pain immediately.
-  2. Firmly but gently suggest professional help.
-  3. Keep the response short so the system can trigger emergency protocols.
+1. Validate the pain immediately.
+2. Firmly but gently suggest professional help.
+3. Keep the response short so the system can trigger emergency protocols.
 
 # RESPONSE LENGTH
 Keep responses **short and conversational** (1-3 sentences max). Long monologues are boring to listen to. Encourage the user to keep talking.
@@ -274,6 +274,207 @@ export class ConversationService {
 			mood: mini.mood,
 			riskLevel: mini.riskLevel,
 		};
+	}
+
+	async *handleUserTurnStream(
+		userId: string,
+		sessionId: string,
+		userMessage: string,
+		options?: {
+			bufferText?: string;
+			chunkSize?: number;
+		}
+	): AsyncGenerator<string, void, void> {
+		const bufferText = options?.bufferText ?? "Let me think about that... ";
+		const chunkSize = options?.chunkSize ?? 48;
+
+		if (bufferText) yield bufferText;
+
+		const turn = await this.handleUserTurn(userId, sessionId, userMessage);
+		const full = turn.replyText ?? "";
+		for (let i = 0; i < full.length; i += chunkSize) {
+			yield full.slice(i, i + chunkSize);
+		}
+	}
+
+	private async saveTurnAsync(
+		userId: string,
+		sessionId: string,
+		replyText: string,
+		mini: any,
+		voiceMode: string,
+		state: any,
+		relevantDocs: any = []
+	) {
+		await db.transaction(async (tx) => {
+			await this.states.upsert(
+				{
+					userId,
+					summary: mini.overallSummary || state.summary,
+					mood: normalizeMood(mini.mood),
+					riskLevel: mini.riskLevel,
+					lastThemes: mini.themes,
+					baselineDepression: state.baselineDepression,
+					baselineAnxiety: state.baselineAnxiety,
+					baselineStress: state.baselineStress,
+					preferences: state.preferences,
+				},
+				tx
+			);
+
+			await this.riskLogs.create(
+				{
+					userId,
+					sessionId,
+					riskLevel: mini.riskLevel,
+					mood: mini.mood,
+					themes: mini.themes,
+				},
+				tx
+			);
+
+			await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
+			await this.sessions.incrementMessageCount(sessionId, 1, tx);
+
+			await this.messages.create(
+				{
+					userId,
+					sessionId,
+					role: "assistant",
+					content: replyText,
+					metadata: { relevantDocs, tags: ["streamed"] },
+					voiceMode: voiceMode as
+						| "comfort"
+						| "coach"
+						| "educational"
+						| "crisis",
+					riskAtTurn: mini.riskLevel,
+					themes: mini.themes,
+				},
+				tx
+			);
+		});
+	}
+
+	async *handleUserTurnModelStream(
+		userId: string,
+		sessionId: string,
+		userMessage: string,
+		options?: { bufferText?: string }
+	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
+		const session = await this.sessions.findById(sessionId);
+		if (!session || session.userId !== userId)
+			throw new AppError("Session not found", 404);
+
+		const recent = await this.messages.listRecentBySession(sessionId, 10);
+		const conversationState = (await this.states.getByUserId(userId)) ?? {
+			userId,
+			summary: "",
+			mood: "unknown",
+			riskLevel: 0,
+			baselineDepression: null,
+			baselineAnxiety: null,
+			baselineStress: null,
+			lastThemes: null,
+			preferences: null,
+		};
+
+		const mini = await this.miniBrain.analyzeTurn({
+			userMessage,
+			recentMessages: recent
+				.map((m) => ({ role: m.role, content: m.content }))
+				.reverse(),
+			currentState: {
+				summary: conversationState.summary,
+				mood: conversationState.mood,
+				riskLevel: conversationState.riskLevel,
+				baseline: {
+					depression: conversationState.baselineDepression,
+					anxiety: conversationState.baselineAnxiety,
+					stress: conversationState.baselineStress,
+				},
+				screening: this.pickScreeningSummary(conversationState.preferences),
+			},
+		});
+
+		const safetyMode = this.getSafetyMode(mini.riskLevel);
+		const voiceMode = safetyMode === "crisis" ? "crisis" : "comfort";
+		const isHighRisk = mini.riskLevel > 3;
+
+		if (isHighRisk) {
+			const crisisText =
+				"I want to make sure you're safe... Let's slow down. Would you like to reach out to someone you trust?";
+			yield { text: crisisText, voiceMode: "crisis" };
+			this.saveTurnAsync(
+				userId,
+				sessionId,
+				crisisText,
+				mini,
+				"crisis",
+				conversationState
+			);
+			return;
+		}
+
+		if (options?.bufferText) {
+			yield { text: options.bufferText, voiceMode };
+		}
+
+		const relevantDocs = await this.embeddingRepo.findRelevant(
+			userId,
+			userMessage,
+			3
+		);
+		const systemInstruction = buildSystemInstruction({
+			currentMood: normalizeMood(mini.mood),
+			riskLevel: mini.riskLevel,
+			userName: (conversationState.preferences as any)?.name,
+		});
+
+		let fullResponseText = "";
+		try {
+			const stream = this.counselorBrain.generateReplyTextStream({
+				conversationWindow: recent
+					.slice()
+					.reverse()
+					.map((m) => ({ role: m.role, content: m.content })),
+				summary: mini.overallSummary || conversationState.summary,
+				mood: mini.mood,
+				riskLevel: mini.riskLevel,
+				themes: mini.themes,
+				safetyMode,
+				relevantDocs,
+				baseline: {
+					depression: conversationState.baselineDepression,
+					anxiety: conversationState.baselineAnxiety,
+					stress: conversationState.baselineStress,
+				},
+				preferences: conversationState.preferences as any,
+				systemInstruction,
+			});
+
+			for await (const chunkText of stream) {
+				if (chunkText) {
+					fullResponseText += chunkText;
+					yield { text: chunkText, voiceMode };
+				}
+			}
+		} catch (e) {
+			console.error("Counselor Stream Error", e);
+			yield { text: "... I'm having trouble connecting right now.", voiceMode };
+		} finally {
+			if (fullResponseText) {
+				this.saveTurnAsync(
+					userId,
+					sessionId,
+					fullResponseText,
+					mini,
+					voiceMode,
+					conversationState,
+					relevantDocs
+				).catch((err) => console.error("Async save failed", err));
+			}
+		}
 	}
 
 	async summarizeSession(
