@@ -161,12 +161,6 @@ const service = new gcp.cloudrunv2.Service(
 							  ]
 							: []),
 					],
-					startupProbe: {
-						httpGet: { path: "/", port: 8080 },
-						timeoutSeconds: 240,
-						periodSeconds: 240,
-						failureThreshold: 1,
-					},
 				},
 			],
 		},
