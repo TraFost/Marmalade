@@ -6,7 +6,7 @@ import {
 	SCREENING_SEVERITY_LEVELS,
 	SCREENING_SLEEP_QUALITIES,
 	SCREENING_STATUSES,
-} from "shared/src/types/screening.type";
+} from "shared";
 
 import {
 	pgTable,
@@ -90,7 +90,7 @@ export {
 	SCREENING_STATUSES,
 	SCREENING_SEVERITY_LEVELS,
 	SCREENING_RISK_LEVELS,
-} from "shared/src/types/screening.type";
+} from "shared";
 export type {
 	ScreeningGender,
 	ScreeningAgeRange,
@@ -99,4 +99,4 @@ export type {
 	ScreeningStatus,
 	ScreeningSeverityLevel,
 	ScreeningRiskLevel,
-} from "shared/src/types/screening.type";
+} from "shared";

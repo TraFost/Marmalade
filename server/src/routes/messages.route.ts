@@ -12,10 +12,7 @@ import { SessionService } from "../services/session.service";
 import { MessageRepository } from "../repositories/message.repository";
 import { ConversationService } from "../services/conversation.service";
 import { db } from "../libs/db/db.lib";
-import type {
-	TextMessageRequest,
-	TextMessageResponse,
-} from "shared/src/types/message.type";
+import type { TextMessageRequest, TextMessageResponse } from "shared";
 
 const sessionService = new SessionService();
 const messageRepository = new MessageRepository();

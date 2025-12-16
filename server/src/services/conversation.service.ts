@@ -12,8 +12,7 @@ import { messages } from "../libs/db/schemas/messages.schema";
 import { getEmitter } from "../libs/events/event-bus";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../libs/db/db.lib";
-import type { ScreeningSummary } from "shared/src/types/screening.type";
-import type { TurnResult } from "shared/src/types/message.type";
+import type { ScreeningSummary, TurnResult } from "shared";
 
 type DBClient = typeof db;
 const allowedMoods = [

@@ -5,7 +5,7 @@ import {
 	SCREENING_GENDERS,
 	SCREENING_MEDICATION_STATUSES,
 	SCREENING_SLEEP_QUALITIES,
-} from "shared/src/types/screening.type";
+} from "shared";
 
 const enumFrom = <const T extends readonly [string, ...string[]]>(values: T) =>
 	z.enum(values);

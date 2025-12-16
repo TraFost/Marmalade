@@ -5,7 +5,7 @@ import { MessageRepository } from "../repositories/message.repository";
 import { ConversationService } from "./conversation.service";
 import { db } from "../libs/db/db.lib";
 import { ScreeningRepository } from "../repositories/screening.repository";
-import type { ScreeningSummary } from "shared/src/types/screening.type";
+import type { ScreeningSummary } from "shared";
 
 type DBClient = typeof db;
 

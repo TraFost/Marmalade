@@ -4,7 +4,7 @@ import { db } from "../libs/db/db.lib";
 import { screenings } from "../libs/db/schemas/screenings.schema";
 
 import type { NewScreening } from "../libs/db/schemas/screenings.schema";
-import type { ScreeningRecord } from "shared/src/types/screening.type";
+import type { ScreeningRecord } from "shared";
 export class ScreeningRepository {
 	async createScreening(data: NewScreening): Promise<ScreeningRecord | null> {
 		const [record] = await db.insert(screenings).values(data).returning();

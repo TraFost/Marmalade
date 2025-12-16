@@ -13,7 +13,7 @@ import type {
 	ScreeningStepOnePayload,
 	ScreeningStepThreePayload,
 	ScreeningStepTwoPayload,
-} from "shared/src/types/screening.type";
+} from "shared";
 
 export const computeQuickDass = (input: QuickDassInput): QuickDassResult => {
 	const dRaw = input.flatJoy + input.motivation;

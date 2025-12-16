@@ -1,7 +1,4 @@
-import type {
-	ApiResponse,
-	ResponseWithData,
-} from "shared/src/types/response.type";
+import type { ApiResponse, ResponseWithData } from "shared";
 
 export const success = (message = "OK"): ApiResponse => ({
 	message,

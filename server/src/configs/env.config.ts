@@ -26,6 +26,7 @@ const envSchema = z.object({
 	PORT: z
 		.string()
 		.min(1)
+		.default("8080")
 		.transform((s) => {
 			const n = Number(s);
 			if (Number.isNaN(n)) throw new Error("PORT must be a number");
