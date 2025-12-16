@@ -129,7 +129,20 @@ const service = new gcp.cloudrunv2.Service(
 			],
 			containers: [
 				{
-					image: image.imageName,
+					// Use the immutable digest so updates roll a new revision even if the tag stays the same.
+					image: image.repoDigest,
+					ports: {
+						containerPort: 8080,
+					},
+					startupProbe: {
+						httpGet: {
+							path: "/",
+							port: 8080,
+						},
+						periodSeconds: 10,
+						timeoutSeconds: 10,
+						failureThreshold: 12,
+					},
 					volumeMounts: [
 						{
 							name: "cloudsql",

@@ -6,7 +6,7 @@ config:
   server:databaseUrl:
     secure: AAABAP4b8I86ASzGzVYPQjGOVDGtirCPxAonxuczRoKUcy8UOlUuvjmH4a6D0NrKpWN2EbF+8FYUkUQUEHFqU1nI8vvj4knHMGgFZXV8tBf69H+pTqt4FwmKerMpThhnCNiFohSn1Zb0Bxe9Y9vn/vi3VeGHOOsN/fKm6jmFcGeAZkRbDSJGMN1h
   server:jwtSecret:
-    secure: AAABAN740P0HkO0jgKREDadnOFaTq66USjaqt79xpAQ=
+    secure: AAABANdNqRWiYCs+yFllUAvZ2gice4zXYtw19SHM/Ct8F3Hc1aZqbgDJ3C+a6c1Si93sdV4mRy4=
   server:jwtPublicKey:
     secure: AAABAPDtTyH1QWUyG7RpJL8VyuT8La+DXp2QOxLN/BU1
   server:googleClientId:
