@@ -6,7 +6,7 @@ import type {
 	ScreeningGender,
 	ScreeningMedicationStatus,
 	ScreeningSleepQuality,
-} from "shared/src/types/screening.type";
+} from "shared";
 
 export type OnboardingDassScores = {
 	[K in keyof QuickDassInput]: number | null;

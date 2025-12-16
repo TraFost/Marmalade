@@ -1,9 +1,6 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
 import type { OnboardingStepProps } from "../onboarding.types";
-import type {
-	ScreeningMedicationStatus,
-	ScreeningSleepQuality,
-} from "shared/src/types/screening.type";
+import type { ScreeningMedicationStatus, ScreeningSleepQuality } from "shared";
 
 const SLEEP_OPTIONS: {
 	label: string;

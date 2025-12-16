@@ -5,10 +5,7 @@ import {
 	getScreeningHistory,
 } from "@/features/welcome/services/api.onboarding";
 import { queryKeys } from "@/shared/lib/react-query/query-keys.lib";
-import type {
-	ScreeningHistoryEntry,
-	ScreeningRecord,
-} from "shared/src/types/screening.type";
+import type { ScreeningHistoryEntry, ScreeningRecord } from "shared";
 
 export function useScreeningDetail(id: string | null) {
 	return useQuery<ScreeningRecord>({

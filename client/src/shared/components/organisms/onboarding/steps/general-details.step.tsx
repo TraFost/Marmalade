@@ -1,9 +1,6 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
 import type { OnboardingStepProps } from "../onboarding.types";
-import type {
-	ScreeningAgeRange,
-	ScreeningGender,
-} from "shared/src/types/screening.type";
+import type { ScreeningAgeRange, ScreeningGender } from "shared";
 
 const GENDER_OPTIONS: { label: string; value: ScreeningGender }[] = [
 	{ label: "Male", value: "male" },

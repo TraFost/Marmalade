@@ -15,7 +15,7 @@ import type {
 	ScreeningStepOnePayload,
 	ScreeningStepThreePayload,
 	ScreeningStepTwoPayload,
-} from "shared/src/types/screening.type";
+} from "shared";
 
 export function useStartScreening(userId?: string) {
 	return useMutation({

@@ -12,8 +12,8 @@ import type {
 	ScreeningStepTwoPayload,
 	ScreeningStepUpdateResponse,
 	ScreeningStepFivePayload,
-} from "shared/src/types/screening.type";
-import type { ResponseWithData } from "shared/src/types/response.type";
+} from "shared";
+import type { ResponseWithData } from "shared";
 
 const BASE = "/screenings";
 
