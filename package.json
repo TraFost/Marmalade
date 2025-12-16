@@ -9,7 +9,8 @@
 	"workspaces": [
 		"./server",
 		"./client",
-		"./shared"
+		"./shared",
+		"./infra"
 	],
 	"scripts": {
 		"dev": "turbo dev",
@@ -21,7 +22,11 @@
 		"lint": "turbo lint",
 		"type-check": "turbo type-check",
 		"test": "turbo test",
-		"postinstall": "turbo build --filter=shared --filter=server"
+		"postinstall": "turbo build --filter=shared --filter=server",
+		"infra:install": "pnpm -C infra install",
+		"infra:preview": "pnpm -C infra preview",
+		"infra:up": "pnpm -C infra up",
+		"infra:destroy": "pnpm -C infra destroy"
 	},
 	"keywords": [
 		"hono",
