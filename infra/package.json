@@ -1,0 +1,22 @@
+{
+	"name": "marmalade-infra",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"preview": "pulumi preview",
+		"up": "pulumi up",
+		"destroy": "pulumi destroy",
+		"refresh": "pulumi refresh"
+	},
+	"dependencies": {
+		"@pulumi/docker": "^4.8.2",
+		"@pulumi/gcp": "^8.35.0",
+		"@pulumi/pulumi": "^3.154.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"typescript": "^5.8.3"
+	}
+}

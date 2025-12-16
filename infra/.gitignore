@@ -1,0 +1,2 @@
+# Ignore secrets containing real keys
+secrets/
