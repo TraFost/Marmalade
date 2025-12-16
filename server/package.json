@@ -5,7 +5,7 @@
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
-		"build": "tsc",
+		"build": "pnpm exec esbuild src/dev.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/index.js",
 		"dev:db:migrate": "cross-env NODE_ENV=development npx drizzle-kit migrate",
 		"dev:db:generate": "cross-env NODE_ENV=development npx drizzle-kit generate",
 		"dev:db:drop": "cross-env NODE_ENV=development npx drizzle-kit drop",
@@ -13,7 +13,7 @@
 		"prod:db:migrate": "cross-env NODE_ENV=production npx drizzle-kit migrate",
 		"prod:db:generate": "cross-env NODE_ENV=production npx drizzle-kit generate",
 		"prod:db:drop": "cross-env NODE_ENV=production npx drizzle-kit drop",
-		"prod:build": "cross-env NODE_ENV=production tsc",
+		"prod:build": "cross-env NODE_ENV=production pnpm run build",
 		"prod": "cross-env NODE_ENV=production node dist/index.js"
 	},
 	"dependencies": {
@@ -38,6 +38,7 @@
 		"@types/node": "^22.0.0",
 		"cross-env": "^10.1.0",
 		"drizzle-kit": "^0.31.7",
+		"esbuild": "^0.25.0",
 		"tsx": "^4.19.0"
 	}
 }
