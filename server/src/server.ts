@@ -58,7 +58,7 @@ export function createApp() {
 	);
 
 	app.route("/api", api);
-	app.route("/hooks", hooksRoute);
+	app.route("/", hooksRoute);
 
 	return app;
 }

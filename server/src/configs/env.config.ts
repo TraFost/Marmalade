@@ -11,7 +11,7 @@ console.log(`Loading environment variables for NODE_ENV=${nodeEnv}..`);
 
 const envSchema = z.object({
 	GOOGLE_CLOUD_PROJECT_ID: z.string().min(1),
-	GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1),
+	GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
 	VERTEX_LOCATION: z.string().min(1).default("us-central1"),
 	VERTEX_MINI_MODEL: z.string().min(1).default("gemini-1.5-flash-001"),
 	VERTEX_COUNSELOR_MODEL: z.string().min(1).default("gemini-1.5-pro-001"),
