@@ -4,7 +4,7 @@
 		// Environment settings
 		"lib": ["ESNext"],
 		"target": "ESNext",
-		"module": "NodeNext",
+		"module": "ESNext",
 		"jsx": "react-jsx",
 		"jsxImportSource": "hono/jsx",
 
@@ -17,9 +17,7 @@
 		"emitDecoratorMetadata": true,
 
 		// Module resolution
-		"moduleResolution": "NodeNext",
-		"rewriteRelativeImportExtensions": true,
-		"verbatimModuleSyntax": false,
+		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": false
 	},
 	"include": ["src/**/*"],
