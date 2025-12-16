@@ -161,6 +161,11 @@ const service = new gcp.cloudrunv2.Service(
 							  ]
 							: []),
 					],
+					startupProbe: {
+						timeoutSeconds: 240,
+						periodSeconds: 240,
+						failureThreshold: 1,
+					},
 				},
 			],
 		},
