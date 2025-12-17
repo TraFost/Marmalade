@@ -11,7 +11,16 @@ declare global {
 	var db: DBType | undefined;
 }
 
-export const client = postgres(env.DATABASE_URL, { prepare: false });
+const cloudSqlSocketHost = env.DATABASE_HOST
+	? env.DATABASE_HOST
+	: env.CLOUDSQL_CONNECTION_NAME
+	? `/cloudsql/${env.CLOUDSQL_CONNECTION_NAME}`
+	: undefined;
+
+export const client = postgres(env.DATABASE_URL, {
+	prepare: false,
+	...(cloudSqlSocketHost ? { host: cloudSqlSocketHost } : {}),
+});
 const drizzleConfig = {
 	schema,
 	driver: "pg",

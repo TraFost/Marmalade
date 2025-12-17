@@ -19,6 +19,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # Copy sources
 COPY shared/src ./shared/src
 COPY server/src ./server/src
+COPY server/drizzle ./server/drizzle
 
 # Build shared + server
 RUN pnpm --filter shared build
@@ -44,6 +45,7 @@ RUN pnpm install --prod --frozen-lockfile --filter server... --ignore-scripts
 
 # Copy build outputs
 COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/server/drizzle ./server/drizzle
 COPY --from=builder /app/shared/dist ./shared/dist
 
 # Cloud Run provides PORT; default is 8080
