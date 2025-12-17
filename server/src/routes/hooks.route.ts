@@ -37,15 +37,6 @@ const isUuid = (value: string) =>
 		value
 	);
 
-const normalizeAuthHeader = (value: string | null) => {
-	if (!value) return null;
-	const trimmed = value.trim();
-	if (!trimmed) return null;
-	return trimmed.toLowerCase().startsWith("bearer ")
-		? trimmed.slice("bearer ".length).trim()
-		: trimmed;
-};
-
 const getMessageText = (m: OpenAIChatMessage | undefined): string => {
 	if (!m) return "";
 	if (typeof m.content === "string") return m.content;
@@ -71,12 +62,6 @@ const openAiError = (message: string, status = 400) =>
 	);
 
 async function handleChatCompletions(c: any) {
-	const authHeader = normalizeAuthHeader(c.req.header("authorization") ?? null);
-
-	if (!authHeader || authHeader !== env.ELEVENLABS_WEBHOOK_SECRET) {
-		return openAiError("Unauthorized", 401);
-	}
-
 	let body: OpenAIChatCompletionRequest;
 	try {
 		body = (await c.req.json()) as OpenAIChatCompletionRequest;
@@ -231,7 +216,27 @@ async function handleChatCompletions(c: any) {
 			const sendDone = () =>
 				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
+			let roleSent = false;
+
 			try {
+				// OpenAI streaming protocol: first chunk must establish the message role.
+				if (!roleSent) {
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: { role: "assistant" },
+								finish_reason: null,
+							},
+						],
+					});
+					roleSent = true;
+				}
+
 				for await (const part of runTurnStream()) {
 					send({
 						id,
@@ -266,6 +271,25 @@ async function handleChatCompletions(c: any) {
 				controller.close();
 			} catch (e) {
 				console.error("Custom LLM streaming failed", e);
+
+				// Even on error, keep the stream semantically valid for strict clients.
+				if (!roleSent) {
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: { role: "assistant" },
+								finish_reason: null,
+							},
+						],
+					});
+					roleSent = true;
+				}
+
 				send({
 					id,
 					object: "chat.completion.chunk",
