@@ -52,6 +52,8 @@ const elevenlabsWebhookSecret = serverCfg.requireSecret(
 const elevenlabsDefaultUserId = serverCfg.getSecret("elevenlabsDefaultUserId");
 
 const cloudSqlConnectionName = serverCfg.require("cloudSqlConnectionName");
+const authUrl = serverCfg.require("authUrl");
+const frontendUrl = serverCfg.get("frontendUrl") ?? "http://localhost:5173";
 
 const databaseHostForCloudRun = `/cloudsql/${cloudSqlConnectionName}`;
 
@@ -69,12 +71,9 @@ const databaseUrlForCloudRun = pulumi
 	});
 
 const vertexLocation = serverCfg.get("vertexLocation") ?? region;
-const vertexMiniModel =
-	serverCfg.get("vertexMiniModel") ?? "gemini-1.5-flash-001";
-const vertexCounselorModel =
-	serverCfg.get("vertexCounselorModel") ?? "gemini-1.5-pro-001";
-const vertexEmbeddingModel =
-	serverCfg.get("vertexEmbeddingModel") ?? "text-embedding-004";
+const vertexMiniModel = serverCfg.get("vertexMiniModel");
+const vertexCounselorModel = serverCfg.get("vertexCounselorModel");
+const vertexEmbeddingModel = serverCfg.get("vertexEmbeddingModel");
 
 const repo = new gcp.artifactregistry.Repository(
 	"marmaladeRepo",
@@ -165,6 +164,12 @@ const service = new gcp.cloudrunv2.Service(
 						},
 					],
 					envs: [
+						{
+							name: "AUTH_URL",
+							value: authUrl,
+						},
+						{ name: "BASE_URL", value: authUrl },
+						{ name: "FRONTEND_URL", value: frontendUrl },
 						{ name: "NODE_ENV", value: "production" },
 						{ name: "GOOGLE_CLOUD_PROJECT_ID", value: project },
 						{ name: "VERTEX_LOCATION", value: vertexLocation },
@@ -227,6 +232,76 @@ const migrateJob = new gcp.cloudrunv2.Job(
 							},
 						],
 						envs: [
+							{ name: "BASE_URL", value: authUrl },
+							{ name: "FRONTEND_URL", value: frontendUrl },
+							{ name: "NODE_ENV", value: "production" },
+							{ name: "GOOGLE_CLOUD_PROJECT_ID", value: project },
+							{ name: "VERTEX_LOCATION", value: vertexLocation },
+							{ name: "VERTEX_MINI_MODEL", value: vertexMiniModel },
+							{ name: "VERTEX_COUNSELOR_MODEL", value: vertexCounselorModel },
+							{ name: "VERTEX_EMBEDDING_MODEL", value: vertexEmbeddingModel },
+							{
+								name: "CLOUDSQL_CONNECTION_NAME",
+								value: cloudSqlConnectionName,
+							},
+							{ name: "DATABASE_URL", value: databaseUrlForCloudRun },
+							{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
+							{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
+							{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
+							{
+								name: "ELEVENLABS_WEBHOOK_SECRET",
+								value: elevenlabsWebhookSecret,
+							},
+							{ name: "JWT_SECRET", value: jwtSecret },
+							{ name: "JWT_PUBLIC_KEY", value: jwtPublicKey },
+							...(elevenlabsDefaultUserId
+								? [
+										{
+											name: "ELEVENLABS_DEFAULT_USER_ID",
+											value: elevenlabsDefaultUserId,
+										},
+								  ]
+								: []),
+						],
+					},
+				],
+			},
+		},
+	},
+	{ dependsOn: services }
+);
+
+const kbSeedJob = new gcp.cloudrunv2.Job(
+	"kbSeedJob",
+	{
+		location: region,
+		name: toId(`marmalade-kb-seed-${stack}`, 63),
+		template: {
+			template: {
+				serviceAccount: runtimeSa.email,
+				volumes: [
+					{
+						name: "cloudsql",
+						cloudSqlInstance: {
+							instances: [cloudSqlConnectionName],
+						},
+					},
+				],
+				containers: [
+					{
+						image: image.repoDigest,
+						workingDir: "/app/server",
+						commands: ["node"],
+						args: ["dist/kb-seed.js"],
+						volumeMounts: [
+							{
+								name: "cloudsql",
+								mountPath: "/cloudsql",
+							},
+						],
+						envs: [
+							{ name: "BASE_URL", value: authUrl },
+							{ name: "FRONTEND_URL", value: frontendUrl },
 							{ name: "NODE_ENV", value: "production" },
 							{ name: "GOOGLE_CLOUD_PROJECT_ID", value: project },
 							{ name: "VERTEX_LOCATION", value: vertexLocation },
@@ -273,3 +348,4 @@ new gcp.cloudrunv2.ServiceIamMember("publicInvoker", {
 
 export const url = service.uri;
 export const migrateJobName = migrateJob.name;
+export const kbSeedJobName = kbSeedJob.name;
