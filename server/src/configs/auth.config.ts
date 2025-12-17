@@ -28,6 +28,12 @@ export const auth = betterAuth({
 	},
 	baseURL: env.BASE_URL,
 	trustedOrigins: [env.FRONTEND_URL],
+	advanced: {
+		defaultCookieAttributes: {
+			sameSite: "None",
+			secure: true,
+		},
+	},
 });
 
 export type AuthSession = typeof auth.$Infer.Session;
