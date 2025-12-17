@@ -5,7 +5,7 @@
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
-		"build": "pnpm exec esbuild src/dev.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/index.js && pnpm exec esbuild src/libs/db/migrate.db.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/migrate.db.js",
+		"build": "pnpm exec esbuild src/dev.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/index.js && pnpm exec esbuild src/libs/db/migrate.db.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/migrate.db.js && pnpm exec esbuild src/scripts/kb-seed.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/kb-seed.js",
 		"dev:db:migrate": "cross-env NODE_ENV=development npx drizzle-kit migrate",
 		"dev:db:generate": "cross-env NODE_ENV=development npx drizzle-kit generate",
 		"dev:db:drop": "cross-env NODE_ENV=development npx drizzle-kit drop",

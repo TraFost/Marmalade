@@ -1,6 +1,7 @@
 import { db } from "../libs/db/db.lib";
 import { kbDocs } from "../libs/db/schemas";
 import { EmbeddingClient } from "../libs/ai/embedding.client";
+import { and, eq } from "drizzle-orm";
 
 const embeddingClient = new EmbeddingClient();
 
@@ -154,6 +155,17 @@ async function seed() {
 		console.log(`Processing: ${item.title} (Topic: ${item.topic})`);
 
 		try {
+			const existing = await db
+				.select({ id: kbDocs.id })
+				.from(kbDocs)
+				.where(and(eq(kbDocs.title, item.title), eq(kbDocs.topic, item.topic)))
+				.limit(1);
+
+			if (existing.length > 0) {
+				console.log(`⏭️  Skipping existing: ${item.title}`);
+				continue;
+			}
+
 			const embeddingVector = await embeddingClient.embed(item.content);
 
 			await db.insert(kbDocs).values({
