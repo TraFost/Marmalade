@@ -53,6 +53,21 @@ const elevenlabsDefaultUserId = serverCfg.getSecret("elevenlabsDefaultUserId");
 
 const cloudSqlConnectionName = serverCfg.require("cloudSqlConnectionName");
 
+const databaseHostForCloudRun = `/cloudsql/${cloudSqlConnectionName}`;
+
+const databaseUrlForCloudRun = pulumi
+	.all([databaseUrl])
+	.apply(([rawDatabaseUrl]) => {
+		try {
+			const url = new URL(rawDatabaseUrl);
+			url.searchParams.delete("host");
+			url.searchParams.delete("sslmode");
+			return url.toString();
+		} catch {
+			return rawDatabaseUrl;
+		}
+	});
+
 const vertexLocation = serverCfg.get("vertexLocation") ?? region;
 const vertexMiniModel =
 	serverCfg.get("vertexMiniModel") ?? "gemini-1.5-flash-001";
@@ -156,7 +171,9 @@ const service = new gcp.cloudrunv2.Service(
 						{ name: "VERTEX_MINI_MODEL", value: vertexMiniModel },
 						{ name: "VERTEX_COUNSELOR_MODEL", value: vertexCounselorModel },
 						{ name: "VERTEX_EMBEDDING_MODEL", value: vertexEmbeddingModel },
-						{ name: "DATABASE_URL", value: databaseUrl },
+						{ name: "CLOUDSQL_CONNECTION_NAME", value: cloudSqlConnectionName },
+						{ name: "DATABASE_URL", value: databaseUrlForCloudRun },
+						{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
 						{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
 						{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
 						{
@@ -181,6 +198,72 @@ const service = new gcp.cloudrunv2.Service(
 	{ dependsOn: services }
 );
 
+const migrateJob = new gcp.cloudrunv2.Job(
+	"dbMigrateJob",
+	{
+		location: region,
+		name: toId(`marmalade-migrate-${stack}`, 63),
+		template: {
+			template: {
+				serviceAccount: runtimeSa.email,
+				volumes: [
+					{
+						name: "cloudsql",
+						cloudSqlInstance: {
+							instances: [cloudSqlConnectionName],
+						},
+					},
+				],
+				containers: [
+					{
+						image: image.repoDigest,
+						workingDir: "/app/server",
+						commands: ["node"],
+						args: ["dist/migrate.db.js"],
+						volumeMounts: [
+							{
+								name: "cloudsql",
+								mountPath: "/cloudsql",
+							},
+						],
+						envs: [
+							{ name: "NODE_ENV", value: "production" },
+							{ name: "GOOGLE_CLOUD_PROJECT_ID", value: project },
+							{ name: "VERTEX_LOCATION", value: vertexLocation },
+							{ name: "VERTEX_MINI_MODEL", value: vertexMiniModel },
+							{ name: "VERTEX_COUNSELOR_MODEL", value: vertexCounselorModel },
+							{ name: "VERTEX_EMBEDDING_MODEL", value: vertexEmbeddingModel },
+							{
+								name: "CLOUDSQL_CONNECTION_NAME",
+								value: cloudSqlConnectionName,
+							},
+							{ name: "DATABASE_URL", value: databaseUrlForCloudRun },
+							{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
+							{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
+							{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
+							{
+								name: "ELEVENLABS_WEBHOOK_SECRET",
+								value: elevenlabsWebhookSecret,
+							},
+							{ name: "JWT_SECRET", value: jwtSecret },
+							{ name: "JWT_PUBLIC_KEY", value: jwtPublicKey },
+							...(elevenlabsDefaultUserId
+								? [
+										{
+											name: "ELEVENLABS_DEFAULT_USER_ID",
+											value: elevenlabsDefaultUserId,
+										},
+								  ]
+								: []),
+						],
+					},
+				],
+			},
+		},
+	},
+	{ dependsOn: services }
+);
+
 new gcp.cloudrunv2.ServiceIamMember("publicInvoker", {
 	name: service.name,
 	location: service.location,
@@ -189,3 +272,4 @@ new gcp.cloudrunv2.ServiceIamMember("publicInvoker", {
 });
 
 export const url = service.uri;
+export const migrateJobName = migrateJob.name;
