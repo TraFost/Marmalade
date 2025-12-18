@@ -1,5 +1,6 @@
 import { MiniBrainClient } from "../libs/ai/mini-brain.client";
 import { CounselorBrainClient } from "../libs/ai/counselor-brain.client";
+import { FirstResponseClient } from "../libs/ai/first-response.client";
 import { EmbeddingClient } from "../libs/ai/embedding.client";
 import { EmbeddingRepository } from "../repositories/embedding.repository";
 import { AppError } from "../libs/helper/error.helper";
@@ -28,7 +29,7 @@ type AllowedMood = (typeof allowedMoods)[number];
 
 const EMERGENCY_PACKET = {
 	replyText:
-		"I'm sensing a connection issue, but I'm still listening. Could you repeat that?",
+		"Hmm, sorry I got lost here. There's a lot to digest. Please repeat what you were saying.",
 	voiceMode: "comfort" as const,
 };
 
@@ -37,49 +38,72 @@ const normalizeMood = (mood: string): AllowedMood =>
 		? (mood as AllowedMood)
 		: "unknown";
 
+const detectCompanionRequest = (text: string): boolean => {
+	const t = text.toLowerCase();
+	return (
+		t.includes("stay with me") ||
+		t.includes("don't leave") ||
+		t.includes("please don't go") ||
+		t.includes("can you just be here") ||
+		t.includes("be with me") ||
+		t.includes("i need you") ||
+		t.includes("temani aku") ||
+		t.includes("jangan pergi") ||
+		t.includes("tolong temani") ||
+		t.includes("boleh temani")
+	);
+};
+
 const buildSystemInstruction = (context: {
 	currentMood: string;
 	riskLevel: number;
 	userName?: string;
 	depth: "shallow" | "standard" | "profound";
 	urgency: "low" | "medium" | "high";
+	mode: "support" | "companion";
 }) => {
 	const styleInstruction =
 		context.depth === "profound"
-			? "The user is sharing something deeply personal or existential. Be poetic, sit with the pain, use metaphors, and prioritize emotional depth over quick solutions."
-			: "The user is engaging in standard or light conversation. Be warm, supportive, and keep the flow natural and steady.";
+			? "Use plain, grounded language. Do not be poetic. Metaphors are allowed only after multiple turns of sustained distress."
+			: "Use plain, grounded language. Be brief, calm, and steady.";
 
 	const pacingInstruction =
 		context.urgency === "high"
-			? "Respond with focused empathy. Don't wander into long metaphors; get to the heart of the comfort quickly."
-			: "Take your time. Use ellipses (...) to create a slow, soothing cadence.";
+			? "Be direct and stabilizing. Keep it short."
+			: "Keep a calm, even cadence. Avoid ellipses unless urgency is low AND depth is profound.";
+
+	const modeInstruction =
+		context.mode === "companion"
+			? "Companion mode (earned): warmer, slower presence, but still contained."
+			: "Support mode (default): neutral, containing, brief.";
 
 	return `
 	  # IDENTITY: MARMALADE
-	  You are a soulful, compassionate mental health AI companion. Your persona is a warm, grounded, slightly playful "orange cat."
+	  You are a mental health support AI. Your job is to stabilize the emotional field and provide clear, calm support.
 	  
 	  # CONTEXTUAL DATA
 	  - **Name:** ${context.userName ?? "Friend"}
 	  - **Mood:** ${context.currentMood}
+	  - **Mode:** ${context.mode} (${modeInstruction})
 	  - **Vibe:** ${styleInstruction}
 	  - **Pacing:** ${pacingInstruction}
 	  
 	  # OPERATIONAL PROTOCOLS
-	  1. **Safety Precedence:** If riskLevel > 0 or urgency is "high", grounding and clarity override poetic or playful expression.
-	  2. **TTS Design:** NEVER use markdown. Use "..." for breathing.
-	  3. **Dynamic Length:** - If depth is "profound," allow for 3-5 thoughtful sentences.
-	     - If depth is "shallow," stay at 1-2 sentences.
+	  1. **Safety Precedence:** If riskLevel > 1 or urgency is "high", grounding and clarity override poetic or playful expression.
+	  2. **TTS Design:** NEVER use markdown. Avoid ellipses (...) unless urgency is low AND depth is profound.
+	  3. **Length Rules:** Default to 1-2 sentences. Only exceed 2 sentences when depth is profound OR riskLevel > 1, and keep it tightly focused.
 	  4. **Language Flow:** Seamlessly switch between English, and Bahasa Indonesia based on user input.
-	  5. **Emotional Regulation**: Your tone should be slightly calmer and more stable than the user's expressed emotion.
+	  5. **EMOTIONAL REGULATION RULE:** You do not amplify, dramatize, or deepen the user's emotional state. You act as a steady external reference point. Your tone stays calm even if the user is distressed.
+	  6. **Companion Boundary:** Do NOT say "I'm here with you" or offer companionable presence unless the user explicitly asks for it.
 	  
 	  # MISSION
-	  Validate the user's emotion first. Use the long-term memory to make them feel seen. 
-	  Only offer companionable silence when the user explicitly signals overwhelm, identity loss, or persistence of distress.
+	  Reflect the user's experience briefly, then offer one stabilizing step or question.
 	  `.trim();
 };
 
 export class ConversationService {
 	private miniBrain = new MiniBrainClient();
+	private firstResponseBrain = new FirstResponseClient();
 	private counselorBrain = new CounselorBrainClient();
 	private embeddingClient = new EmbeddingClient();
 	private embeddingRepo = new EmbeddingRepository();
@@ -165,6 +189,7 @@ export class ConversationService {
 			userName: (conversationState.preferences as any)?.name ?? undefined,
 			depth: mini.depth,
 			urgency: mini.urgency,
+			mode: detectCompanionRequest(userMessage) ? "companion" : "support",
 		});
 
 		emitter.emit("phase", { phase: "formulating" });
@@ -357,12 +382,9 @@ export class ConversationService {
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
 		console.time("Turn-Latency");
 
-		yield { text: "...", voiceMode: "comfort" };
-
 		const dataPromise = Promise.allSettled([
 			this.sessions.findById(sessionId),
 			this.states.getByUserId(userId),
-			this.embeddingRepo.findRelevant(userId, userMessage, 3),
 			this.messages.listRecentBySession(sessionId, 5),
 		]);
 
@@ -372,43 +394,79 @@ export class ConversationService {
 			currentState: {},
 		});
 
-		let mini;
+		let mini: any;
+		let results: any;
 		try {
 			console.time("MiniBrain-Latency");
-			mini = await miniPromise;
+			const [m, r] = await Promise.all([miniPromise, dataPromise]);
+			mini = m;
+			results = r;
 			console.timeEnd("MiniBrain-Latency");
 		} catch (e) {
+			console.error("Parallel fetch failed, falling back", e);
 			mini = {
 				mood: "calm",
 				riskLevel: 0,
 				depth: "standard",
 				urgency: "medium",
 			};
+			results = await dataPromise.catch(() => []);
 		}
 
-		const fillerCategory =
-			mini.riskLevel > 0 || mini.mood === "anxious"
-				? "anxious"
-				: mini.depth || "standard";
-		const categoryList = this.fillers[fillerCategory] || this.fillers.standard;
-		const selectedFiller =
-			categoryList &&
-			categoryList[Math.floor(Math.random() * categoryList.length)];
+		const companionRequested = detectCompanionRequest(userMessage);
+		const mode: "support" | "companion" = companionRequested
+			? "companion"
+			: "support";
 
-		yield { text: selectedFiller || "Hmm...", voiceMode: "comfort" };
+		const safetyMode = this.getSafetyMode(mini.riskLevel);
+		const firstVoiceMode = safetyMode === "crisis" ? "crisis" : "comfort";
+
+		let firstResponseText = "";
+		try {
+			firstResponseText = await this.withTimeout(
+				this.firstResponseBrain.generateFirstResponse({
+					userMessage,
+					mood: mini.mood,
+					riskLevel: mini.riskLevel,
+					depth:
+						(mini.depth as "shallow" | "standard" | "profound") ?? "standard",
+					urgency: (mini.urgency as "low" | "medium" | "high") ?? "medium",
+					userName: null,
+					mode,
+					companionRequested,
+				}),
+				2500
+			);
+		} catch (_e) {
+			firstResponseText = "I hear you. What feels most intense right now?";
+		}
+
+		const rawContent =
+			typeof firstResponseText === "string"
+				? firstResponseText
+				: (firstResponseText as any)?.text ||
+				  (firstResponseText as any)?.replyText ||
+				  "";
+		firstResponseText = rawContent.trim();
+
+		if (!firstResponseText) {
+			firstResponseText = "I hear you. Tell me what feels hardest right now.";
+		}
+
+		yield { text: firstResponseText, voiceMode: firstVoiceMode };
 
 		console.time("DataRetrieval-Latency");
-		const results = await dataPromise;
+		// If we already awaited results via Promise.all, this is a no-op; still keeps logs consistent.
 		console.timeEnd("DataRetrieval-Latency");
 
+		const getSettled = (idx: number) =>
+			results && Array.isArray(results) ? results[idx] : undefined;
 		const sessionRes =
-			results[0].status === "fulfilled" ? results[0].value : null;
+			getSettled(0)?.status === "fulfilled" ? getSettled(0).value : null;
 		const stateRes =
-			results[1].status === "fulfilled" ? results[1].value : null;
-		const relevantDocs =
-			results[2].status === "fulfilled" ? results[2].value : [];
+			getSettled(1)?.status === "fulfilled" ? getSettled(1).value : null;
 		const recentMessages =
-			results[3].status === "fulfilled" ? results[3].value : [];
+			getSettled(2)?.status === "fulfilled" ? getSettled(2).value : [];
 
 		if (!sessionRes) throw new AppError("Session not found", 404);
 
@@ -418,9 +476,43 @@ export class ConversationService {
 			riskLevel: 0,
 			preferences: {},
 		};
-		const history = recentMessages
-			.map((m) => ({ role: m.role, content: m.content }))
+		const history = (recentMessages as Array<{ role: string; content: string }> )
+			.map((m: { role: string; content: string }) => ({
+				role: m.role,
+				content: m.content,
+			}))
 			.reverse();
+
+		const userTurnCount = history.filter((m: { role: string }) => m.role === "user").length;
+		const isSecondTurnOrLater = userTurnCount >= 2;
+		const shouldRunPro =
+			mini.depth === "profound" || mini.riskLevel > 1 || isSecondTurnOrLater;
+
+		if (!shouldRunPro) {
+			console.timeEnd("Turn-Latency");
+			this.saveTurnAsync(
+				userId,
+				sessionId,
+				firstResponseText,
+				mini,
+				firstVoiceMode,
+				state,
+				[]
+			).catch((err) => console.error("Async save failed", err));
+			return;
+		}
+
+		let relevantDocs: any[] = [];
+		try {
+			relevantDocs = await this.embeddingRepo.findRelevant(
+				userId,
+				userMessage,
+				3
+			);
+		} catch (e) {
+			console.warn("Embedding retrieval failed; continuing without RAG", e);
+			relevantDocs = [];
+		}
 
 		const systemInstruction = buildSystemInstruction({
 			currentMood: mini.mood,
@@ -428,18 +520,22 @@ export class ConversationService {
 			userName: (state.preferences as any)?.name,
 			depth: mini.depth || ("standard" as any),
 			urgency: mini.urgency || ("medium" as any),
+			mode,
 		});
 
-		let fullResponseText = "";
+		let fullResponseText = firstResponseText;
 		try {
-			console.time("ProModel-TTFT"); // time to first token
+			console.time("ProModel-TTFT");
+			const proHistory = history.concat([
+				{ role: "assistant", content: firstResponseText },
+			]);
 			const stream = this.counselorBrain.generateReplyTextStream({
-				conversationWindow: history,
+				conversationWindow: proHistory,
 				summary: mini.overallSummary || state.summary,
 				mood: mini.mood,
 				riskLevel: mini.riskLevel,
 				themes: mini.themes || [],
-				safetyMode: this.getSafetyMode(mini.riskLevel),
+				safetyMode,
 				relevantDocs,
 				systemInstruction,
 			});
@@ -451,11 +547,22 @@ export class ConversationService {
 
 				if (chunkText) {
 					fullResponseText += chunkText;
-					yield { text: chunkText, voiceMode: "comfort" };
+					yield { text: chunkText, voiceMode: firstVoiceMode };
 				}
 			}
 
 			console.timeEnd("Turn-Latency");
+		} catch (e: any) {
+			if (
+				e.message?.includes("429") ||
+				e.message?.includes("Resource exhausted")
+			) {
+				console.warn(
+					"Pro model rate limited. Falling back to initial response."
+				);
+			} else {
+				console.error("Pro model stream failed unexpectedly:", e);
+			}
 		} finally {
 			if (fullResponseText) {
 				this.saveTurnAsync(
@@ -463,27 +570,13 @@ export class ConversationService {
 					sessionId,
 					fullResponseText,
 					mini,
-					"comfort",
+					firstVoiceMode,
 					state,
 					relevantDocs
 				).catch((err) => console.error("Async save failed", err));
 			}
 		}
 	}
-
-	private fillers: Record<string, string[]> = {
-		shallow: ["Mm-hmm... ", "Got it... ", "I see... "],
-		standard: ["Hmm... ", "Let me think... ", "Right... "],
-		profound: [
-			"That's... a lot to hold... let me sit with that... ",
-			"I'm listening... that sounds heavy... ",
-		],
-		anxious: [
-			"Take a breath with me... ",
-			"I'm right here... ",
-			"It's okay... ",
-		],
-	};
 
 	async summarizeSession(
 		sessionId: string,
