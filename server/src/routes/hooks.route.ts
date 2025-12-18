@@ -237,7 +237,7 @@ async function handleChatCompletions(c: any) {
 				});
 
 				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-			} catch (e) {
+			} catch (e: any) {
 				console.error("Streaming turn failed", e);
 				send({
 					id,
@@ -248,8 +248,7 @@ async function handleChatCompletions(c: any) {
 						{
 							index: 0,
 							delta: {
-								content:
-									"I'm having a temporary issue... let's try again in a moment.",
+								content: e.replyText || "Internal error occurred.",
 							},
 							finish_reason: "stop",
 						},
