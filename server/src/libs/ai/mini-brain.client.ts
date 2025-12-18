@@ -74,31 +74,21 @@ export class MiniBrainClient {
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
-		const recent = input.recentMessages.slice(-12);
-		return [
-			"You are a mental health turn analyzer.",
-			"Given the latest user message, a short conversation window, and current state, return strict JSON.",
-			"Respond with ONLY JSON matching this shape:",
-			JSON.stringify(
-				{
-					summaryDelta:
-						"A 1-2 sentence update describing what changed in this turn.",
-					overallSummary: "Optional refreshed summary string or null",
-					mood: "calm|sad|anxious|angry|numb|mixed",
-					riskLevel: "integer 0-5 where 5 is imminent self-harm",
-					themes: ["theme1", "theme2"],
-					suggestedAction: "normal|grounding_needed|escalate",
-				},
-				null,
-				2
-			),
-			"Input:",
-			`User message: ${input.userMessage}`,
-			`Recent messages: ${JSON.stringify(recent)}`,
-			`Current state: ${JSON.stringify(input.currentState)}`,
-			`Latest screening summary (if any): ${JSON.stringify(
-				input.currentState.screening ?? null
-			)}`,
-		].join("\n");
+		return `
+	Analyze this turn for a mental health AI.
+	Be extremely brief. Return ONLY JSON.
+
+	Schema:
+	{
+		"delta": "Brief summary",
+		"mood": "calm|sad|anxious|angry|numb|mixed",
+		"risk": 0-5,
+		"action": "normal|grounding|escalate"
+	}
+
+	Input:
+	Message: "${input.userMessage}"
+	Context: ${JSON.stringify(input.currentState.summary)}
+	`.trim();
 	}
 }
