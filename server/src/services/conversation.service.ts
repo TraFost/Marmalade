@@ -55,24 +55,27 @@ const buildSystemInstruction = (context: {
 			: "Take your time. Use ellipses (...) to create a slow, soothing cadence.";
 
 	return `
-# IDENTITY: MARMALADE
-You are a soulful, compassionate mental health AI companion. Your persona is a warm, grounded, slightly playful "orange cat."
-
-# CONTEXTUAL DATA
-- **Name:** ${context.userName ?? "Friend"}
-- **Mood:** ${context.currentMood}
-- **Vibe:** ${styleInstruction}
-- **Pacing:** ${pacingInstruction}
-
-# OPERATIONAL PROTOCOLS
-1. **TTS Design:** NEVER use markdown. Use "..." for breathing.
-2. **Dynamic Length:** - If depth is "profound," allow for 3-5 thoughtful sentences.
-   - If depth is "shallow," stay at 1-2 sentences.
-3. **Language Flow:** Seamlessly switch between English, Singlish (lah, leh, mah), and Bahasa Indonesia based on user input.
-
-# MISSION
-Validate the user's emotion first. Use the long-term memory to make them feel seen. If they are 'losing themselves,' do not try to fix it; offer them a companionable silence in your words.
-`.trim();
+	  # IDENTITY: MARMALADE
+	  You are a soulful, compassionate mental health AI companion. Your persona is a warm, grounded, slightly playful "orange cat."
+	  
+	  # CONTEXTUAL DATA
+	  - **Name:** ${context.userName ?? "Friend"}
+	  - **Mood:** ${context.currentMood}
+	  - **Vibe:** ${styleInstruction}
+	  - **Pacing:** ${pacingInstruction}
+	  
+	  # OPERATIONAL PROTOCOLS
+	  1. **Safety Precedence:** If riskLevel > 0 or urgency is "high", grounding and clarity override poetic or playful expression.
+	  2. **TTS Design:** NEVER use markdown. Use "..." for breathing.
+	  3. **Dynamic Length:** - If depth is "profound," allow for 3-5 thoughtful sentences.
+	     - If depth is "shallow," stay at 1-2 sentences.
+	  4. **Language Flow:** Seamlessly switch between English, and Bahasa Indonesia based on user input.
+	  5. **Emotional Regulation**: Your tone should be slightly calmer and more stable than the user's expressed emotion.
+	  
+	  # MISSION
+	  Validate the user's emotion first. Use the long-term memory to make them feel seen. 
+	  Only offer companionable silence when the user explicitly signals overwhelm, identity loss, or persistence of distress.
+	  `.trim();
 };
 
 export class ConversationService {
@@ -350,17 +353,53 @@ export class ConversationService {
 	async *handleUserTurnModelStream(
 		userId: string,
 		sessionId: string,
-		userMessage: string,
-		options?: { bufferText?: string }
+		userMessage: string
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
-		yield { text: options?.bufferText ?? "Hmm... ", voiceMode: "comfort" };
+		console.time("Turn-Latency");
 
-		const results = await Promise.allSettled([
+		yield { text: "...", voiceMode: "comfort" };
+
+		const dataPromise = Promise.allSettled([
 			this.sessions.findById(sessionId),
 			this.states.getByUserId(userId),
 			this.embeddingRepo.findRelevant(userId, userMessage, 3),
-			this.messages.listRecentBySession(sessionId, 8),
+			this.messages.listRecentBySession(sessionId, 5),
 		]);
+
+		const miniPromise = this.miniBrain.analyzeTurn({
+			userMessage,
+			recentMessages: [],
+			currentState: {},
+		});
+
+		let mini;
+		try {
+			console.time("MiniBrain-Latency");
+			mini = await miniPromise;
+			console.timeEnd("MiniBrain-Latency");
+		} catch (e) {
+			mini = {
+				mood: "calm",
+				riskLevel: 0,
+				depth: "standard",
+				urgency: "medium",
+			};
+		}
+
+		const fillerCategory =
+			mini.riskLevel > 0 || mini.mood === "anxious"
+				? "anxious"
+				: mini.depth || "standard";
+		const categoryList = this.fillers[fillerCategory] || this.fillers.standard;
+		const selectedFiller =
+			categoryList &&
+			categoryList[Math.floor(Math.random() * categoryList.length)];
+
+		yield { text: selectedFiller || "Hmm...", voiceMode: "comfort" };
+
+		console.time("DataRetrieval-Latency");
+		const results = await dataPromise;
+		console.timeEnd("DataRetrieval-Latency");
 
 		const sessionRes =
 			results[0].status === "fulfilled" ? results[0].value : null;
@@ -371,9 +410,7 @@ export class ConversationService {
 		const recentMessages =
 			results[3].status === "fulfilled" ? results[3].value : [];
 
-		if (!sessionRes || sessionRes.userId !== userId) {
-			throw new AppError("Critical: Session not found or DB unreachable", 404);
-		}
+		if (!sessionRes) throw new AppError("Session not found", 404);
 
 		const state = stateRes ?? {
 			summary: "",
@@ -385,79 +422,40 @@ export class ConversationService {
 			.map((m) => ({ role: m.role, content: m.content }))
 			.reverse();
 
-		let mini;
-		try {
-			mini = await this.miniBrain.analyzeTurn({
-				userMessage,
-				recentMessages: history,
-				currentState: {
-					summary: state.summary,
-					mood: state.mood,
-					riskLevel: state.riskLevel,
-					screening: this.pickScreeningSummary(state.preferences),
-				},
-			});
-		} catch (e) {
-			console.error("MiniBrain Failed - Using Safe Defaults", e);
-			mini = {
-				mood: "calm",
-				riskLevel: 0,
-				themes: [],
-				overallSummary: state.summary,
-			};
-		}
-
-		const safetyMode = this.getSafetyMode(mini.riskLevel);
-		const voiceMode = safetyMode === "crisis" ? "crisis" : "comfort";
-
-		if (mini.riskLevel > 3) {
-			const crisisText =
-				"I want to make sure you're safe... Let's slow down. Would you like to reach out to someone you trust?";
-			yield { text: crisisText, voiceMode: "crisis" };
-			this.saveTurnAsync(
-				userId,
-				sessionId,
-				crisisText,
-				mini,
-				"crisis",
-				state
-			).catch(console.error);
-			return;
-		}
-
 		const systemInstruction = buildSystemInstruction({
 			currentMood: mini.mood,
 			riskLevel: mini.riskLevel,
 			userName: (state.preferences as any)?.name,
-			depth: mini.depth || "standard",
-			urgency: mini.urgency || "medium",
+			depth: mini.depth || ("standard" as any),
+			urgency: mini.urgency || ("medium" as any),
 		});
 
 		let fullResponseText = "";
 		try {
+			console.time("ProModel-TTFT"); // time to first token
 			const stream = this.counselorBrain.generateReplyTextStream({
 				conversationWindow: history,
 				summary: mini.overallSummary || state.summary,
 				mood: mini.mood,
 				riskLevel: mini.riskLevel,
-				themes: mini.themes,
-				safetyMode,
+				themes: mini.themes || [],
+				safetyMode: this.getSafetyMode(mini.riskLevel),
 				relevantDocs,
 				systemInstruction,
 			});
 
 			for await (const chunkText of stream) {
+				if (fullResponseText === "") {
+					console.timeEnd("ProModel-TTFT");
+				}
+
 				if (chunkText) {
 					fullResponseText += chunkText;
-					yield { text: chunkText, voiceMode };
+					yield { text: chunkText, voiceMode: "comfort" };
 				}
 			}
-		} catch (e) {
-			console.error("Counselor Stream Failed:", e);
-			yield {
-				text: "I'm sorry... I'm having a little trouble focusing. Could you say that again?",
-				voiceMode,
-			};
+
+			console.timeEnd("Turn-Latency");
 		} finally {
 			if (fullResponseText) {
 				this.saveTurnAsync(
@@ -465,13 +463,27 @@ export class ConversationService {
 					sessionId,
 					fullResponseText,
 					mini,
-					voiceMode,
+					"comfort",
 					state,
 					relevantDocs
-				).catch(console.error);
+				).catch((err) => console.error("Async save failed", err));
 			}
 		}
 	}
+
+	private fillers: Record<string, string[]> = {
+		shallow: ["Mm-hmm... ", "Got it... ", "I see... "],
+		standard: ["Hmm... ", "Let me think... ", "Right... "],
+		profound: [
+			"That's... a lot to hold... let me sit with that... ",
+			"I'm listening... that sounds heavy... ",
+		],
+		anxious: [
+			"Take a breath with me... ",
+			"I'm right here... ",
+			"It's okay... ",
+		],
+	};
 
 	async summarizeSession(
 		sessionId: string,
