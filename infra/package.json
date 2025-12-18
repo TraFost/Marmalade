@@ -11,12 +11,12 @@
 		"refresh": "pulumi refresh"
 	},
 	"dependencies": {
-		"@pulumi/docker": "^4.8.2",
-		"@pulumi/gcp": "^8.35.0",
-		"@pulumi/pulumi": "^3.154.0"
+		"@pulumi/docker": "^4.10.0",
+		"@pulumi/gcp": "^8.41.1",
+		"@pulumi/pulumi": "^3.213.0"
 	},
 	"devDependencies": {
-		"@types/node": "^22.0.0",
-		"typescript": "^5.8.3"
+		"@types/node": "^22.19.3",
+		"typescript": "^5.9.3"
 	}
 }
