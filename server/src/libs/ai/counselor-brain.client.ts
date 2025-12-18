@@ -88,8 +88,8 @@ export class CounselorBrainClient {
 				role: "system",
 			},
 			generationConfig: {
-				topP: 0.7,
-				temperature: 0.95,
+				topP: 0.8,
+				temperature: 0.7,
 			},
 		});
 
@@ -156,9 +156,10 @@ export class CounselorBrainClient {
 	}
 
 	private buildStreamingPrompt(input: CounselorBrainInput): string {
-		const recent = input.conversationWindow.slice(-10);
+		const recent = input.conversationWindow.slice(-3);
+
 		const memoryContext = (input.relevantDocs ?? [])
-			.map((d, i) => `[Memory/Fact ${i + 1}]: ${d.content}`)
+			.map((d, i) => `[Memory/Fact ${i + 1}]: ${d.content.slice(0, 300)}`)
 			.join("\n");
 
 		const nameContext = (input.preferences as any)?.name
@@ -181,8 +182,10 @@ export class CounselorBrainClient {
 		  # RECENT CONVERSATION
 		  ${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
 			  
-		  # THE ACTION
-		  Respond with depth. If the user is "losing themselves," don't try to "fix" them with a list of steps. 
+		  # ACTION
+		  Match emotional depth to the classified depth. 
+		  If depth is not "profound", keep tone grounded, brief, and emotionally contained.
+		  If the user is "losing themselves," don't try to "fix" them with a list of steps. 
 		  Instead, provide a companionable presence. 
 		  Talk to them like you're sitting next to them in a quiet room. 
 		  Mention things from their 'Summary' or 'Memories' if it helps them feel seen.`.trim();
