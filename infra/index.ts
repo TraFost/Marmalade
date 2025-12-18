@@ -141,6 +141,10 @@ const service = new gcp.cloudrunv2.Service(
 					},
 				},
 			],
+			scaling: {
+				minInstanceCount: 1,
+				maxInstanceCount: 10,
+			},
 			containers: [
 				{
 					// Use the immutable digest so updates roll a new revision even if the tag stays the same.
