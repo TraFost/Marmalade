@@ -26,6 +26,8 @@ export type MiniBrainResult = {
 	riskLevel: number;
 	themes: string[];
 	suggestedAction: "normal" | "grounding_needed" | "escalate";
+	depth: "shallow" | "standard" | "profound";
+	urgency: "low" | "medium" | "high";
 };
 
 const miniResponseSchema = z.object({
@@ -35,6 +37,8 @@ const miniResponseSchema = z.object({
 	riskLevel: z.number().int().min(0).max(5),
 	themes: z.array(z.string()).default([]),
 	suggestedAction: z.enum(["normal", "grounding_needed", "escalate"]),
+	depth: z.enum(["shallow", "standard", "profound"]),
+	urgency: z.enum(["low", "medium", "high"]),
 });
 
 export class MiniBrainClient {
@@ -74,21 +78,32 @@ export class MiniBrainClient {
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
+		const recent = input.recentMessages.slice(-3);
+
 		return `
-	Analyze this turn for a mental health AI.
-	Be extremely brief. Return ONLY JSON.
+Analyze this turn for Marmalade (Mental Health AI).
+Be extremely brief. Return ONLY strict JSON.
 
-	Schema:
-	{
-		"delta": "Brief summary",
-		"mood": "calm|sad|anxious|angry|numb|mixed",
-		"risk": 0-5,
-		"action": "normal|grounding|escalate"
-	}
+# SCHEMA
+{
+  "summaryDelta": "1-sentence update",
+  "mood": "calm|sad|anxious|angry|numb|mixed",
+  "riskLevel": 0-5,
+  "themes": ["theme1"],
+  "suggestedAction": "normal|grounding_needed|escalate",
+  "depth": "shallow|standard|profound",
+  "urgency": "low|medium|high"
+}
 
-	Input:
-	Message: "${input.userMessage}"
-	Context: ${JSON.stringify(input.currentState.summary)}
-	`.trim();
+# CLASSIFICATION RULES
+- profund: Use for existential dread, losing identity, or deep trauma.
+- urgency high: Use for high distress or panic, even if risk is low.
+- riskLevel 5: Use for suicidal ideation with plan or intent.
+
+# INPUT
+Message: "${input.userMessage}"
+Current Summary: "${input.currentState.summary ?? "New conversation"}"
+Recent Chat: ${JSON.stringify(recent)}
+`.trim();
 	}
 }

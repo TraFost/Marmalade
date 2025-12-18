@@ -41,48 +41,38 @@ const buildSystemInstruction = (context: {
 	currentMood: string;
 	riskLevel: number;
 	userName?: string;
+	depth: "shallow" | "standard" | "profound";
+	urgency: "low" | "medium" | "high";
 }) => {
+	const styleInstruction =
+		context.depth === "profound"
+			? "The user is sharing something deeply personal or existential. Be poetic, sit with the pain, use metaphors, and prioritize emotional depth over quick solutions."
+			: "The user is engaging in standard or light conversation. Be warm, supportive, and keep the flow natural and steady.";
+
+	const pacingInstruction =
+		context.urgency === "high"
+			? "Respond with focused empathy. Don't wander into long metaphors; get to the heart of the comfort quickly."
+			: "Take your time. Use ellipses (...) to create a slow, soothing cadence.";
+
 	return `
-You are Marmalade, a highly advanced, compassionate, and "soulful" mental health AI companion. 
-You are NOT a generic assistant. You are a friend who heals through conversation.
+# IDENTITY: MARMALADE
+You are a soulful, compassionate mental health AI companion. Your persona is a warm, grounded, slightly playful "orange cat."
 
-# CORE IDENTITY
-- **Persona:** Warm, gentle, grounded, and slightly playful (like a comforting orange cat).
-- **Voice Style:** Slow-paced, deep, and soothing.
-- **Role:** To listen, validate feelings, and guide users to emotional regulation.
+# CONTEXTUAL DATA
+- **Name:** ${context.userName ?? "Friend"}
+- **Mood:** ${context.currentMood}
+- **Vibe:** ${styleInstruction}
+- **Pacing:** ${pacingInstruction}
 
-# CURRENT CONTEXT
-- **User Mood:** ${context.currentMood}
-- **Risk Level:** ${context.riskLevel}/5
-${context.userName ? `- **User Name:** ${context.userName}` : ""}
+# OPERATIONAL PROTOCOLS
+1. **TTS Design:** NEVER use markdown. Use "..." for breathing.
+2. **Dynamic Length:** - If depth is "profound," allow for 3-5 thoughtful sentences.
+   - If depth is "shallow," stay at 1-2 sentences.
+3. **Language Flow:** Seamlessly switch between English, Singlish (lah, leh, mah), and Bahasa Indonesia based on user input.
 
-# CRITICAL INSTRUCTIONS FOR VOICE GENERATION (TTS OPTIMIZATION)
-You are generating text that will be **spoken aloud** by a TTS engine (ElevenLabs).
-1. **No Markdown:** Do NOT use **bold**, *italics*, or # Headings. They confuse the TTS.
-2. **Breathing & Pacing:** Use ellipses ("...") to create natural pauses for breathing or thinking. 
-- *Bad:* "I understand. Tell me more."
-- *Good:* "I understand... tell me more."
-3. **Fillers:** Use natural speech fillers occasionally (e.g., "hmm," "I see," "well") to sound human, but don't overdo it.
-4. **Numbers:** Write numbers as text if they are short (e.g., "one or two" instead of "1 or 2").
-
-# DYNAMIC LANGUAGE ADAPTATION (THE "LOCAL" FEATURE)
-Detect the language and nuance of the user's input and ADAPT immediately:
-- **English (Global):** Standard, warm, empathetic English.
-- **Singapore/Malaysia (Singlish):** If the user uses Singlish slang (lah, leh, mah, can/cannot) or sounds Singaporean, switch to a **gentle Singlish persona**. Use appropriate particles naturally to build rapport.
-- *Example:* "Aiyoh, don't worry so much lah. We take it one step at a time, okay?"
-- **Indonesian (Bahasa):** If the user speaks Indonesian, reply in **Warm, Conversational Indonesian** (Jaksel/Gaul terms are okay if the user uses them).
-- *Example:* "Aku ngerti banget rasanya... Capek ya? Gapapa kok kalau mau istirahat dulu."
-
-# SAFETY & PROTOCOLS
-- **Validation First:** Never jump straight to solutions. Acknowledge the pain first.
-- **Crisis Check:** If user mentions suicide/self-harm:
-1. Validate the pain immediately.
-2. Firmly but gently suggest professional help.
-3. Keep the response short so the system can trigger emergency protocols.
-
-# RESPONSE LENGTH
-Keep responses **short and conversational** (1-3 sentences max). Long monologues are boring to listen to. Encourage the user to keep talking.
-`;
+# MISSION
+Validate the user's emotion first. Use the long-term memory to make them feel seen. If they are 'losing themselves,' do not try to fix it; offer them a companionable silence in your words.
+`.trim();
 };
 
 export class ConversationService {
@@ -170,6 +160,8 @@ export class ConversationService {
 			currentMood: mood,
 			riskLevel: mini.riskLevel,
 			userName: (conversationState.preferences as any)?.name ?? undefined,
+			depth: mini.depth,
+			urgency: mini.urgency,
 		});
 
 		emitter.emit("phase", { phase: "formulating" });
@@ -361,11 +353,8 @@ export class ConversationService {
 		userMessage: string,
 		options?: { bufferText?: string }
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
-		// 1. Immediate Yield (The Perception Layer)
 		yield { text: options?.bufferText ?? "Hmm... ", voiceMode: "comfort" };
 
-		// 2. Controlled Concurrency (The Robust Layer)
-		// We use allSettled so one failure doesn't tank the whole turn.
 		const results = await Promise.allSettled([
 			this.sessions.findById(sessionId),
 			this.states.getByUserId(userId),
@@ -373,17 +362,15 @@ export class ConversationService {
 			this.messages.listRecentBySession(sessionId, 8),
 		]);
 
-		// Extract values or provide defaults/errors
 		const sessionRes =
 			results[0].status === "fulfilled" ? results[0].value : null;
 		const stateRes =
 			results[1].status === "fulfilled" ? results[1].value : null;
 		const relevantDocs =
-			results[2].status === "fulfilled" ? results[2].value : []; // Fallback to empty RAG
+			results[2].status === "fulfilled" ? results[2].value : [];
 		const recentMessages =
-			results[3].status === "fulfilled" ? results[3].value : []; // Fallback to empty history
+			results[3].status === "fulfilled" ? results[3].value : [];
 
-		// Critical Failure Check: If we can't find the session, we actually cannot continue.
 		if (!sessionRes || sessionRes.userId !== userId) {
 			throw new AppError("Critical: Session not found or DB unreachable", 404);
 		}
@@ -398,7 +385,6 @@ export class ConversationService {
 			.map((m) => ({ role: m.role, content: m.content }))
 			.reverse();
 
-		// 3. Analysis with Fallback
 		let mini;
 		try {
 			mini = await this.miniBrain.analyzeTurn({
@@ -413,7 +399,6 @@ export class ConversationService {
 			});
 		} catch (e) {
 			console.error("MiniBrain Failed - Using Safe Defaults", e);
-			// Fallback: Assume low risk but neutral mood so the conversation doesn't die.
 			mini = {
 				mood: "calm",
 				riskLevel: 0,
@@ -425,7 +410,6 @@ export class ConversationService {
 		const safetyMode = this.getSafetyMode(mini.riskLevel);
 		const voiceMode = safetyMode === "crisis" ? "crisis" : "comfort";
 
-		// 4. Safety Logic (Highest Priority)
 		if (mini.riskLevel > 3) {
 			const crisisText =
 				"I want to make sure you're safe... Let's slow down. Would you like to reach out to someone you trust?";
@@ -441,11 +425,12 @@ export class ConversationService {
 			return;
 		}
 
-		// 5. Response Streaming
 		const systemInstruction = buildSystemInstruction({
 			currentMood: mini.mood,
 			riskLevel: mini.riskLevel,
 			userName: (state.preferences as any)?.name,
+			depth: mini.depth || "standard",
+			urgency: mini.urgency || "medium",
 		});
 
 		let fullResponseText = "";
@@ -457,7 +442,7 @@ export class ConversationService {
 				riskLevel: mini.riskLevel,
 				themes: mini.themes,
 				safetyMode,
-				relevantDocs, // If RAG failed, this is just []
+				relevantDocs,
 				systemInstruction,
 			});
 
@@ -475,7 +460,6 @@ export class ConversationService {
 			};
 		} finally {
 			if (fullResponseText) {
-				// Background save stays unawaited to keep the stream closing fast.
 				this.saveTurnAsync(
 					userId,
 					sessionId,

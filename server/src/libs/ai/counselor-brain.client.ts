@@ -88,7 +88,8 @@ export class CounselorBrainClient {
 				role: "system",
 			},
 			generationConfig: {
-				temperature: 0.7,
+				topP: 0.7,
+				temperature: 0.95,
 			},
 		});
 
@@ -155,31 +156,35 @@ export class CounselorBrainClient {
 	}
 
 	private buildStreamingPrompt(input: CounselorBrainInput): string {
-		const recent = input.conversationWindow.slice(-12);
-		const docContext = (input.relevantDocs ?? []).map((d) => ({
-			source: d.source,
-			content: d.content?.slice(0, 800),
-			type: d.type,
-		}));
+		const recent = input.conversationWindow.slice(-10);
+		const memoryContext = (input.relevantDocs ?? [])
+			.map((d, i) => `[Memory/Fact ${i + 1}]: ${d.content}`)
+			.join("\n");
 
-		return [
-			"Generate a spoken, TTS-friendly response.",
-			"IMPORTANT: Output ONLY the raw spoken text.",
-			"Do NOT include JSON, headers, or labels like 'VOICE_MODE:'.",
-			"Do NOT output markdown (bold, italics).",
+		const nameContext = (input.preferences as any)?.name
+			? `Address them as ${(input.preferences as any).name}.`
+			: "Address them warmly as a friend.";
 
-			"--- CONTEXT DATA ---",
-			`User Summary: ${input.summary ?? "None"}`,
-			`Current Mood: ${input.mood ?? "unknown"}`,
-			`Risk Level: ${input.riskLevel} (Safety Mode: ${input.safetyMode})`,
-			`Themes: ${JSON.stringify(input.themes)}`,
-			`Baseline Stats: ${JSON.stringify(input.baseline ?? {})}`,
-
-			"--- KNOWLEDGE BASE ---",
-			docContext.length > 0 ? JSON.stringify(docContext) : "No relevant docs.",
-
-			"--- RECENT CONVERSATION ---",
-			JSON.stringify(recent),
-		].join("\n\n");
+		return `
+		  # ROLE
+		  You are Marmalade. Generate a soulful, spoken response. 
+		  Use raw text only—no markdown, no symbols.
+			  
+		  # MEMORY & KNOWLEDGE
+		  ${memoryContext || "You are building a new history with the user."}
+			  
+		  # USER CONTEXT
+		  Name: ${nameContext}
+		  Summary of Journey: ${input.summary}
+		  Mood: ${input.mood}
+			  
+		  # RECENT CONVERSATION
+		  ${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
+			  
+		  # THE ACTION
+		  Respond with depth. If the user is "losing themselves," don't try to "fix" them with a list of steps. 
+		  Instead, provide a companionable presence. 
+		  Talk to them like you're sitting next to them in a quiet room. 
+		  Mention things from their 'Summary' or 'Memories' if it helps them feel seen.`.trim();
 	}
 }
