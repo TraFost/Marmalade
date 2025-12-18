@@ -361,46 +361,72 @@ export class ConversationService {
 		userMessage: string,
 		options?: { bufferText?: string }
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
-		const session = await this.sessions.findById(sessionId);
-		if (!session || session.userId !== userId)
-			throw new AppError("Session not found", 404);
+		// 1. Immediate Yield (The Perception Layer)
+		yield { text: options?.bufferText ?? "Hmm... ", voiceMode: "comfort" };
 
-		const recent = await this.messages.listRecentBySession(sessionId, 10);
-		const conversationState = (await this.states.getByUserId(userId)) ?? {
-			userId,
+		// 2. Controlled Concurrency (The Robust Layer)
+		// We use allSettled so one failure doesn't tank the whole turn.
+		const results = await Promise.allSettled([
+			this.sessions.findById(sessionId),
+			this.states.getByUserId(userId),
+			this.embeddingRepo.findRelevant(userId, userMessage, 3),
+			this.messages.listRecentBySession(sessionId, 8),
+		]);
+
+		// Extract values or provide defaults/errors
+		const sessionRes =
+			results[0].status === "fulfilled" ? results[0].value : null;
+		const stateRes =
+			results[1].status === "fulfilled" ? results[1].value : null;
+		const relevantDocs =
+			results[2].status === "fulfilled" ? results[2].value : []; // Fallback to empty RAG
+		const recentMessages =
+			results[3].status === "fulfilled" ? results[3].value : []; // Fallback to empty history
+
+		// Critical Failure Check: If we can't find the session, we actually cannot continue.
+		if (!sessionRes || sessionRes.userId !== userId) {
+			throw new AppError("Critical: Session not found or DB unreachable", 404);
+		}
+
+		const state = stateRes ?? {
 			summary: "",
 			mood: "unknown",
 			riskLevel: 0,
-			baselineDepression: null,
-			baselineAnxiety: null,
-			baselineStress: null,
-			lastThemes: null,
-			preferences: null,
+			preferences: {},
 		};
+		const history = recentMessages
+			.map((m) => ({ role: m.role, content: m.content }))
+			.reverse();
 
-		const mini = await this.miniBrain.analyzeTurn({
-			userMessage,
-			recentMessages: recent
-				.map((m) => ({ role: m.role, content: m.content }))
-				.reverse(),
-			currentState: {
-				summary: conversationState.summary,
-				mood: conversationState.mood,
-				riskLevel: conversationState.riskLevel,
-				baseline: {
-					depression: conversationState.baselineDepression,
-					anxiety: conversationState.baselineAnxiety,
-					stress: conversationState.baselineStress,
+		// 3. Analysis with Fallback
+		let mini;
+		try {
+			mini = await this.miniBrain.analyzeTurn({
+				userMessage,
+				recentMessages: history,
+				currentState: {
+					summary: state.summary,
+					mood: state.mood,
+					riskLevel: state.riskLevel,
+					screening: this.pickScreeningSummary(state.preferences),
 				},
-				screening: this.pickScreeningSummary(conversationState.preferences),
-			},
-		});
+			});
+		} catch (e) {
+			console.error("MiniBrain Failed - Using Safe Defaults", e);
+			// Fallback: Assume low risk but neutral mood so the conversation doesn't die.
+			mini = {
+				mood: "calm",
+				riskLevel: 0,
+				themes: [],
+				overallSummary: state.summary,
+			};
+		}
 
 		const safetyMode = this.getSafetyMode(mini.riskLevel);
 		const voiceMode = safetyMode === "crisis" ? "crisis" : "comfort";
-		const isHighRisk = mini.riskLevel > 3;
 
-		if (isHighRisk) {
+		// 4. Safety Logic (Highest Priority)
+		if (mini.riskLevel > 3) {
 			const crisisText =
 				"I want to make sure you're safe... Let's slow down. Would you like to reach out to someone you trust?";
 			yield { text: crisisText, voiceMode: "crisis" };
@@ -410,45 +436,28 @@ export class ConversationService {
 				crisisText,
 				mini,
 				"crisis",
-				conversationState
-			);
+				state
+			).catch(console.error);
 			return;
 		}
 
-		if (options?.bufferText) {
-			yield { text: options.bufferText, voiceMode };
-		}
-
-		const relevantDocs = await this.embeddingRepo.findRelevant(
-			userId,
-			userMessage,
-			3
-		);
+		// 5. Response Streaming
 		const systemInstruction = buildSystemInstruction({
-			currentMood: normalizeMood(mini.mood),
+			currentMood: mini.mood,
 			riskLevel: mini.riskLevel,
-			userName: (conversationState.preferences as any)?.name,
+			userName: (state.preferences as any)?.name,
 		});
 
 		let fullResponseText = "";
 		try {
 			const stream = this.counselorBrain.generateReplyTextStream({
-				conversationWindow: recent
-					.slice()
-					.reverse()
-					.map((m) => ({ role: m.role, content: m.content })),
-				summary: mini.overallSummary || conversationState.summary,
+				conversationWindow: history,
+				summary: mini.overallSummary || state.summary,
 				mood: mini.mood,
 				riskLevel: mini.riskLevel,
 				themes: mini.themes,
 				safetyMode,
-				relevantDocs,
-				baseline: {
-					depression: conversationState.baselineDepression,
-					anxiety: conversationState.baselineAnxiety,
-					stress: conversationState.baselineStress,
-				},
-				preferences: conversationState.preferences as any,
+				relevantDocs, // If RAG failed, this is just []
 				systemInstruction,
 			});
 
@@ -459,19 +468,23 @@ export class ConversationService {
 				}
 			}
 		} catch (e) {
-			console.error("Counselor Stream Error", e);
-			yield { text: "... I'm having trouble connecting right now.", voiceMode };
+			console.error("Counselor Stream Failed:", e);
+			yield {
+				text: "I'm sorry... I'm having a little trouble focusing. Could you say that again?",
+				voiceMode,
+			};
 		} finally {
 			if (fullResponseText) {
+				// Background save stays unawaited to keep the stream closing fast.
 				this.saveTurnAsync(
 					userId,
 					sessionId,
 					fullResponseText,
 					mini,
 					voiceMode,
-					conversationState,
+					state,
 					relevantDocs
-				).catch((err) => console.error("Async save failed", err));
+				).catch(console.error);
 			}
 		}
 	}
