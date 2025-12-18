@@ -26,6 +26,7 @@
 		"infra:install": "pnpm -C infra install",
 		"infra:preview": "pnpm -C infra preview",
 		"infra:up": "pnpm -C infra up",
+		"infra:deploy": "cd infra && pulumi up --yes && cd ..",
 		"infra:destroy": "pnpm -C infra destroy"
 	},
 	"keywords": [
