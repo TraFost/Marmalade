@@ -81,29 +81,33 @@ export class MiniBrainClient {
 		const recent = input.recentMessages.slice(-3);
 
 		return `
-Analyze this turn for Marmalade (Mental Health AI).
-Be extremely brief. Return ONLY strict JSON.
-
-# SCHEMA
-{
-  "summaryDelta": "1-sentence update",
-  "mood": "calm|sad|anxious|angry|numb|mixed",
-  "riskLevel": 0-5,
-  "themes": ["theme1"],
-  "suggestedAction": "normal|grounding_needed|escalate",
-  "depth": "shallow|standard|profound",
-  "urgency": "low|medium|high"
-}
-
-# CLASSIFICATION RULES
-- profund: Use for existential dread, losing identity, or deep trauma.
-- urgency high: Use for high distress or panic, even if risk is low.
-- riskLevel 5: Use for suicidal ideation with plan or intent.
-
-# INPUT
-Message: "${input.userMessage}"
-Current Summary: "${input.currentState.summary ?? "New conversation"}"
-Recent Chat: ${JSON.stringify(recent)}
-`.trim();
+	      Analyze this turn for Marmalade (Mental Health AI).
+	      Be extremely brief. Return ONLY strict JSON.
+		      
+	      # SCHEMA
+	      {
+	        "summaryDelta": "1-sentence update",
+	        "mood": "calm|sad|anxious|angry|numb|mixed",
+	        "riskLevel": 0-4,
+	        "themes": ["theme1"],
+	        "suggestedAction": "normal|grounding_needed|escalate",
+	        "depth": "shallow|standard|profound",
+	        "urgency": "low|medium|high"
+	      }
+		      
+	      # CLASSIFICATION RULES
+	      - profund: Use for existential dread, losing identity, or deep trauma.
+	      - urgency high: Use for high distress or panic, even if risk is low.
+	      - riskLevel 4: Use for suicidal ideation with plan or intent.
+		  - riskLevel 3: Use for suicidal ideation without plan or intent.
+	      - riskLevel 2: Use for passive suicidal thoughts or self-harm talk.
+	      - riskLevel 1: Use for fleeting dark thoughts, no ideation.
+	      - riskLevel 0: No suicidal thoughts.
+		      
+	      # INPUT
+	      Message: "${input.userMessage}"
+	      Current Summary: "${input.currentState.summary ?? "New conversation"}"
+	      Recent Chat: ${JSON.stringify(recent)}
+	      `.trim();
 	}
 }
