@@ -96,7 +96,9 @@ export class MiniBrainClient {
 	      }
 		      
 	      # CLASSIFICATION RULES
-	      - profund: Use for existential dread, losing identity, or deep trauma.
+	      - profound: ONLY if the user expresses identity collapse (e.g., "I don't know who I am"), meaning collapse (life feels meaningless), persistent hopelessness, or repeated existential distress across multiple turns.
+	      - profound MUST NOT be used for: stress, pain, sadness, confusion, loneliness, or a first-time mention of distress without identity/meaning language.
+	      - GUARDRAIL: If this is the first mention of distress AND the message has no identity/meaning-collapse language, depth MUST NOT be "profound".
 	      - urgency high: Use for high distress or panic, even if risk is low.
 	      - riskLevel 4: Use for suicidal ideation with plan or intent.
 		  - riskLevel 3: Use for suicidal ideation without plan or intent.
