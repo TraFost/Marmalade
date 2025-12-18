@@ -55,7 +55,7 @@ const openAiError = (message: string, status = 400) =>
 			error: {
 				message,
 				type: "invalid_request_error",
-				code: "bad_request",
+				Krauscode: "bad_request",
 			},
 		}),
 		{ status, headers: { "Content-Type": "application/json" } }
@@ -81,9 +81,10 @@ async function handleChatCompletions(c: any) {
 		?.toString()
 		.trim();
 	const userId = providedUserId || env.ELEVENLABS_DEFAULT_USER_ID;
+
 	if (!userId) {
 		return openAiError(
-			"Missing user identifier. Provide `user_id` (body) or `x-user-id` (header), or set ELEVENLABS_DEFAULT_USER_ID.",
+			"Missing user identifier. Provide `user_id` (body) or `x-user-id` (header).",
 			400
 		);
 	}
@@ -96,21 +97,14 @@ async function handleChatCompletions(c: any) {
 	if (incomingSessionId && isUuid(incomingSessionId)) {
 		sessionId = incomingSessionId;
 	} else if (incomingSessionId) {
-		// ElevenLabs often provides a non-UUID conversation id.
-		// Map it to a stable internal DB UUID so message history stays on one session.
 		const key = `${userId}:${incomingSessionId}`;
 		sessionId = externalSessionToInternal.get(key);
-		if (!sessionId) {
-			console.log(
-				"Non-UUID session id received; will create a DB session and map it",
-				incomingSessionId
-			);
-		}
 	}
 
 	const userMessages = Array.isArray(body.messages) ? body.messages : [];
 	const lastUser = [...userMessages].reverse().find((m) => m?.role === "user");
 	const transcript = getMessageText(lastUser).trim();
+
 	if (!transcript) {
 		return openAiError("No user message content found", 400);
 	}
@@ -118,7 +112,7 @@ async function handleChatCompletions(c: any) {
 	const created = Math.floor(Date.now() / 1000);
 	const id = `chatcmpl-${Date.now()}`;
 
-	const runTurn = async () => {
+	const prepareTurn = async () => {
 		const session = await sessionService.ensureSession(userId, sessionId);
 
 		if (incomingSessionId && !isUuid(incomingSessionId)) {
@@ -144,48 +138,23 @@ async function handleChatCompletions(c: any) {
 			await sessionService.incrementMessageCount(session.id, 1, tx);
 		});
 
-		return conversationService.handleUserTurn(userId, session.id, transcript);
-	};
-
-	const runTurnStream = async function* () {
-		const session = await sessionService.ensureSession(userId, sessionId);
-
-		if (incomingSessionId && !isUuid(incomingSessionId)) {
-			const key = `${userId}:${incomingSessionId}`;
-			if (!externalSessionToInternal.has(key)) {
-				externalSessionToInternal.set(key, session.id);
-			}
-		}
-
-		await db.transaction(async (tx) => {
-			await messageRepo.create(
-				{
-					userId,
-					sessionId: session.id,
-					role: "user",
-					content: transcript,
-					metadata: incomingSessionId
-						? { externalSessionId: incomingSessionId }
-						: undefined,
-				},
-				tx
-			);
-			await sessionService.incrementMessageCount(session.id, 1, tx);
-		});
-
-		for await (const chunk of conversationService.handleUserTurnModelStream(
-			userId,
-			session.id,
-			transcript,
-			{ bufferText: "Let me think about that... " }
-		)) {
-			yield chunk.text;
-		}
+		return session;
 	};
 
 	if (!wantsStream) {
 		try {
-			const turn = await runTurn();
+			const session = await prepareTurn();
+			let fullText = "";
+			for await (const part of conversationService.handleUserTurnModelStream(
+				userId,
+				session.id,
+				transcript
+			)) {
+				if (part.text !== "...") {
+					fullText += part.text;
+				}
+			}
+
 			return new Response(
 				JSON.stringify({
 					id,
@@ -195,7 +164,7 @@ async function handleChatCompletions(c: any) {
 					choices: [
 						{
 							index: 0,
-							message: { role: "assistant", content: turn.replyText },
+							message: { role: "assistant", content: fullText.trim() },
 							finish_reason: "stop",
 						},
 					],
@@ -203,7 +172,7 @@ async function handleChatCompletions(c: any) {
 				{ headers: { "Content-Type": "application/json" } }
 			);
 		} catch (e) {
-			console.error("Custom LLM /chat/completions failed", e);
+			console.error("Non-streaming turn failed", e);
 			return openAiError("Internal Server Error", 500);
 		}
 	}
@@ -213,44 +182,44 @@ async function handleChatCompletions(c: any) {
 		async start(controller) {
 			const send = (obj: unknown) =>
 				controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-			const sendDone = () =>
-				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-
-			let roleSent = false;
 
 			try {
-				// OpenAI streaming protocol: first chunk must establish the message role.
-				if (!roleSent) {
-					send({
-						id,
-						object: "chat.completion.chunk",
-						created,
-						model,
-						choices: [
-							{
-								index: 0,
-								delta: { role: "assistant" },
-								finish_reason: null,
-							},
-						],
-					});
-					roleSent = true;
-				}
+				const session = await prepareTurn();
 
-				for await (const part of runTurnStream()) {
-					send({
-						id,
-						object: "chat.completion.chunk",
-						created,
-						model,
-						choices: [
-							{
-								index: 0,
-								delta: { content: part },
-								finish_reason: null,
-							},
-						],
-					});
+				send({
+					id,
+					object: "chat.completion.chunk",
+					created,
+					model,
+					choices: [
+						{
+							index: 0,
+							delta: { role: "assistant" },
+							finish_reason: null,
+						},
+					],
+				});
+
+				for await (const chunk of conversationService.handleUserTurnModelStream(
+					userId,
+					session.id,
+					transcript
+				)) {
+					if (chunk.text) {
+						send({
+							id,
+							object: "chat.completion.chunk",
+							created,
+							model,
+							choices: [
+								{
+									index: 0,
+									delta: { content: chunk.text },
+									finish_reason: null,
+								},
+							],
+						});
+					}
 				}
 
 				send({
@@ -267,29 +236,9 @@ async function handleChatCompletions(c: any) {
 					],
 				});
 
-				sendDone();
-				controller.close();
+				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 			} catch (e) {
-				console.error("Custom LLM streaming failed", e);
-
-				// Even on error, keep the stream semantically valid for strict clients.
-				if (!roleSent) {
-					send({
-						id,
-						object: "chat.completion.chunk",
-						created,
-						model,
-						choices: [
-							{
-								index: 0,
-								delta: { role: "assistant" },
-								finish_reason: null,
-							},
-						],
-					});
-					roleSent = true;
-				}
-
+				console.error("Streaming turn failed", e);
 				send({
 					id,
 					object: "chat.completion.chunk",
@@ -298,12 +247,15 @@ async function handleChatCompletions(c: any) {
 					choices: [
 						{
 							index: 0,
-							delta: { content: "I'm having a temporary issue... " },
-							finish_reason: null,
+							delta: {
+								content:
+									"I'm having a temporary issue... let's try again in a moment.",
+							},
+							finish_reason: "stop",
 						},
 					],
 				});
-				sendDone();
+			} finally {
 				controller.close();
 			}
 		},
