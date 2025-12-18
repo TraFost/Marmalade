@@ -476,14 +476,16 @@ export class ConversationService {
 			riskLevel: 0,
 			preferences: {},
 		};
-		const history = (recentMessages as Array<{ role: string; content: string }> )
+		const history = (recentMessages as Array<{ role: string; content: string }>)
 			.map((m: { role: string; content: string }) => ({
 				role: m.role,
 				content: m.content,
 			}))
 			.reverse();
 
-		const userTurnCount = history.filter((m: { role: string }) => m.role === "user").length;
+		const userTurnCount = history.filter(
+			(m: { role: string }) => m.role === "user"
+		).length;
 		const isSecondTurnOrLater = userTurnCount >= 2;
 		const shouldRunPro =
 			mini.depth === "profound" || mini.riskLevel > 1 || isSecondTurnOrLater;
@@ -499,7 +501,7 @@ export class ConversationService {
 				state,
 				[]
 			).catch((err) => console.error("Async save failed", err));
-			return;
+			// TODO: NEED TO LOOK AGAIN IN THIS
 		}
 
 		let relevantDocs: any[] = [];
