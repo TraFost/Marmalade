@@ -5,7 +5,7 @@ import { MessageRepository } from "../repositories/message.repository";
 import { ConversationService } from "./conversation.service";
 import { db } from "../libs/db/db.lib";
 import { ScreeningRepository } from "../repositories/screening.repository";
-import type { ScreeningSummary } from "shared";
+import type { StateMappingSignals, UserStateGraph } from "shared";
 
 type DBClient = typeof db;
 
@@ -30,15 +30,76 @@ export class SessionService {
 			const latestScreening = await this.screenings.findLatestCompletedByUser(
 				userId
 			);
-			const screeningSummary = latestScreening
-				? this.buildScreeningSummary(latestScreening)
-				: undefined;
 
-			await this.ensureConversationState(userId, tx);
-			if (screeningSummary) {
+			const state = await this.ensureConversationState(userId, tx);
+			const existingPrefs =
+				state.preferences && typeof state.preferences === "object"
+					? (state.preferences as Record<string, unknown>)
+					: {};
+
+			if (latestScreening) {
+				const derived = this.buildStateMappingSignals(latestScreening);
+				const prevSignals =
+					existingPrefs.stateMappingSignals &&
+					typeof existingPrefs.stateMappingSignals === "object"
+						? (existingPrefs.stateMappingSignals as Record<string, unknown>)
+						: {};
+
+				const nextSignals: StateMappingSignals = {
+					...(prevSignals as any),
+					...derived,
+					profile: {
+						...((prevSignals as any).profile ?? {}),
+						...(derived.profile ?? {}),
+					},
+					dass: {
+						...((prevSignals as any).dass ?? {}),
+						...(derived.dass ?? {}),
+					},
+				};
+
+				const prevGraph =
+					existingPrefs.userStateGraph &&
+					typeof existingPrefs.userStateGraph === "object"
+						? (existingPrefs.userStateGraph as any)
+						: null;
+				const nextGraph: UserStateGraph =
+					prevGraph && prevGraph.version === 1
+						? prevGraph
+						: {
+								version: 1,
+								updatedAt: new Date().toISOString(),
+								baseline: null,
+								lastRead: null,
+						  };
+
+				const goals = Array.isArray((latestScreening as any).goals)
+					? ((latestScreening as any).goals as unknown[]).filter(
+							(g) => typeof g === "string" && g.trim().length > 0
+					  )
+					: [];
+				nextGraph.anchors = {
+					goals: Array.from(
+						new Set([
+							...(nextGraph.anchors?.goals ?? []),
+							...(goals as string[]),
+						])
+					),
+					lifeAnchors: nextGraph.anchors?.lifeAnchors ?? [],
+					values: nextGraph.anchors?.values ?? [],
+					rememberedDreams: nextGraph.anchors?.rememberedDreams ?? [],
+				};
+				nextGraph.updatedAt = new Date().toISOString();
+
 				await this.states.updateByUserId(
 					userId,
-					{ preferences: { screeningSummary } },
+					{
+						preferences: {
+							...existingPrefs,
+							userStateGraph: nextGraph,
+							stateMappingSignals: nextSignals,
+						},
+					},
 					tx
 				);
 			}
@@ -47,38 +108,29 @@ export class SessionService {
 		});
 	}
 
-	private buildScreeningSummary(screening: {
+	private buildStateMappingSignals(screening: {
 		gender?: string | null;
 		ageRange?: string | null;
 		sleepQuality?: string | null;
+		medicationStatus?: string | null;
 		happinessScore?: number | null;
 		goals?: string[] | null;
-		riskLevel?: string | null;
 		dassDepression?: number | null;
 		dassAnxiety?: number | null;
 		dassStress?: number | null;
-		dassDepressionLevel?: string | null;
-		dassAnxietyLevel?: string | null;
-		dassStressLevel?: string | null;
-	}): ScreeningSummary {
+	}): StateMappingSignals {
 		return {
-			riskLevel: (screening.riskLevel as any) ?? null,
 			dass: {
 				depressionScore: screening.dassDepression ?? null,
 				anxietyScore: screening.dassAnxiety ?? null,
 				stressScore: screening.dassStress ?? null,
-				depressionLevel: (screening.dassDepressionLevel as any) ?? null,
-				anxietyLevel: (screening.dassAnxietyLevel as any) ?? null,
-				stressLevel: (screening.dassStressLevel as any) ?? null,
 			},
-			wellbeing: {
-				sleepQuality: (screening.sleepQuality as any) ?? null,
-				happinessScore: screening.happinessScore ?? null,
-			},
+			sleepQuality: screening.sleepQuality ?? null,
+			medicationStatus: screening.medicationStatus ?? null,
+			happinessScore: screening.happinessScore ?? null,
 			profile: {
-				gender: (screening.gender as any) ?? null,
-				ageRange: (screening.ageRange as any) ?? null,
-				goals: screening.goals ?? [],
+				gender: screening.gender ?? null,
+				ageRange: screening.ageRange ?? null,
 			},
 		};
 	}
