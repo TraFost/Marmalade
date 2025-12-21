@@ -47,7 +47,7 @@ Use this guide whenever you touch the client bundle to maintain the feature-firs
 ### Types & Shared Code
 
 - Feature-specific types in `src/features/<feature>/types/`.
-- Shared types (e.g., screening enums) in `shared/src/types/`, imported as `import type { ScreeningGender } from "shared"`.
+- Shared types (e.g., state mapping graph/signals) in `shared/src/types/`, imported as `import type { StateMappingUpsertRequest } from "shared"`.
 - Hooks in `src/shared/hooks/` for cross-feature logic (e.g., `use-auth.hook.ts`).
 - Local hooks in `src/features/<feature>/hooks/` for feature-specific logic.
 - Library code in `src/shared/lib/` (e.g., `api-client/`, `helper/`).
@@ -60,7 +60,7 @@ Use this guide whenever you touch the client bundle to maintain the feature-firs
 2. For a new organism: Add `src/shared/components/organisms/<feature>/new-section.tsx`, using atoms/molecules and colocating data/logic.
 3. For new atoms/molecules: Place in `src/shared/components/atoms/` or `molecules/`, ensuring they use `cn` and Tailwind.
 4. Update routing in `app/router/` if needed.
-5. Example: Adding an onboarding step involves creating a new step component in `shared/components/organisms/onboarding/steps/`, updating `STEP_DEFINITIONS` in the page, and ensuring types align with shared screening types.
+5. Example: Adding an onboarding step involves creating a new step component in `shared/components/organisms/onboarding/steps/`, updating `STEP_DEFINITIONS` in the page, and ensuring types align with `shared/components/organisms/onboarding/onboarding.types.ts`.
 
 ### Best Practices
 
@@ -77,4 +77,4 @@ Use this guide whenever you touch the client bundle to maintain the feature-firs
 - Queries/mutations live in `src/features/<feature>/hooks/` (e.g., `use-query.onboarding.ts`, `use-mutation.onboarding.ts`) and must use the shared `queryKeys` factory (`@/shared/lib/react-query/query-keys.lib.ts`).
 - Every mutation must be optimistic: use `onMutate` to snapshot and update cache, `onError` to roll back, and `onSettled` to call the relevant central invalidation helper (see `invalidations.service.ts`). Keep list + detail caches in sync.
 - Follow the pattern in `.github/hook-example.md` for structure: service functions + hooks in one module, keepPreviousData, enabled flags for dependent queries, infinite query pagination, and cache updates via `queryClient.setQueryData`.
-- For onboarding/screening, mirror the todos pattern: start + step mutations in `use-mutation.onboarding.ts` (optimistic, invalidate detail/history) and detail/history queries in `use-query.onboarding.ts` keyed by `queryKeys.screenings.*`.
+- For onboarding/state-mapping, use `POST /state-mapping/upsert` and invalidate `queryKeys.stateMapping.graph()`; prefer a single upsert mutation over step-specific backend resources.
