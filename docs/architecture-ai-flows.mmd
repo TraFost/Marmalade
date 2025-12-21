@@ -1,0 +1,94 @@
+%% Marmalade — AI Flows & ElevenLabs Hooks
+%% File: docs/architecture-ai-flows.mmd
+
+# Hooks Integration (ElevenLabs agents)
+
+```mermaid
+flowchart LR
+  external[ElevenLabs Agent / Custom LLM]
+  hooks[Hooks: POST /v1/chat/completions<br/>(server/src/routes/hooks.route.ts)]
+  prepare[prepareTurn: ensureSession + persist user message (message.repo)]
+  conv[ConversationService]
+  stream[Server SSE / event stream]
+
+  external -->|POST chat completion request| hooks
+  hooks --> prepare
+  prepare --> conv
+  conv -->|handleUserTurnModelStream| conv
+  conv -->|streaming chunks| hooks
+  hooks -->|SSE chunks| external
+
+  classDef info fill:#e8f7ff,stroke:#7cc0ff
+  note[(Note: Supports streaming and non-streaming; headers x-user-id / x-session-id supported.)]:::info
+```
+
+# Sequence: ElevenLabs incoming request (streaming)
+
+```mermaid
+sequenceDiagram
+  participant Agent as ElevenLabs Agent
+  participant Hooks as /v1/chat/completions
+  participant Prepare as prepareTurn
+  participant Conv as ConversationService
+  participant Mini as MiniBrain
+  participant Coord as TurnCoordinator
+  participant Coun as Counselor
+  participant DB as DB
+
+  Agent->>Hooks: POST /v1/chat/completions {messages, stream=true}
+  Hooks->>Prepare: ensure session + persist message
+  Prepare->>DB: write user message
+  Prepare-->>Hooks: session ready
+  Hooks->>Conv: start handleUserTurnModelStream(session.id, transcript)
+  Conv->>Mini: analyzeTurn (fast state read)
+  Mini-->>Conv: stateRead, stateDelta
+  Conv->>Coord: coordinateTurn(graph, stateRead, signals)
+  Coord->>Coun: request reply (system instruction + preferences)
+  Coun-->>Conv: streaming reply chunks
+  Conv-->>Hooks: stream chunks back
+  Hooks-->>Agent: SSE chunked responses
+  Conv->>DB: persist updated graph & signals
+```
+
+# AI Flows: which model, when, and how
+
+```mermaid
+flowchart TB
+  User[User message]
+  Mini[MiniBrain: fast analysis]
+  Coord[Turn Coordinator: deterministic rules]
+  Counselor[Counselor LLM]
+  First[FirstResponse]
+  RAG[EmbeddingRepo / RAG]
+
+  User --> Mini
+  Mini --> Coord
+  Coord --> RAG
+  Coord --> Counselor
+  Coord --> First
+  Counselor -->|final reply| User
+```
+
+## How-to (operational notes)
+
+- MiniBrain (fast analysis)
+  - Use for: immediate safety checks, building `stateRead` and `stateDelta`, suggesting probes.
+  - Response must be validated with zod (already done in mini-brain client) and keep outputs small.
+
+- Turn Coordinator
+  - Deterministic rules (server): `willStatus` reduces threshold for grounding; `interactionPreference` adjusts language plan; `lifeAnchors` bias anchoring.
+  - Ensures the system has a consistent plan before calling larger LLMs.
+
+- Counselor (main LLM)
+  - Use for: generating the substantive reply with access to RAG, system instructions tuned for `languagePlan` and `decision`.
+  - Inputs: systemInstruction (pinned), conversation window, compressed RAG results, `preferences` (graph + signals + language plan + stateRead + stateDelta).
+
+- Hooks route specifics
+  - Headers: `x-user-id` (preferred) or `user_id` in body; `session_id` accepted for client session mapping.
+  - Streaming: SSE with `chat.completion.chunk` events (compatible with ElevenLabs agents). Non-streaming returns JSON chat.completion.
+
+- Safety
+  - Always enforce coarse gating server-side (`intervention-arbiter`) — do not delegate grounding eligibility to LLM prompt only.
+  - Use `systemInstruction` templates that encode `interactionPreference`/`willStatus` so model output is aligned with deterministic plan.
+
+---

@@ -1,0 +1,138 @@
+%% Marmalade — Expanded Architecture Diagram
+%% File: docs/architecture-expanded.mmd
+%% Contains: Flowchart (system components) + Sequence (turn flow) + short annotations
+
+%% Flowchart: high-level components + data flows
+```mermaid
+flowchart LR
+  %% CLIENT
+  subgraph CLIENT ["Client (Browser / App)"]
+    direction TB
+    Onboard[Onboarding UI<br/>(5 steps + V2 fields)]
+    ChatUI[Chat UI / Voice Input]
+    Onboard -->|POST /api/state-mapping/upsert| API_Upsert
+    Onboard -->|GET /api/state-mapping/graph| API_Graph
+    ChatUI -->|HTTP/WS message| API_Conversation
+    Onboard -. hydrate (pristine only) .-> Onboard
+  end
+
+  %% SERVER ROUTES
+  subgraph SERVER_ROUTES ["Server (Hono)"]
+    direction LR
+    API_Graph[GET /api/state-mapping/graph<br/>(state-mapping.route.ts)]
+    API_Upsert[POST /api/state-mapping/upsert<br/>(state-mapping.route.ts)]
+    API_Conversation[POST /api/conversation (or websocket)]
+  end
+
+  %% SERVICES & AGENTS
+  subgraph SERVICES ["Server services & agents"]
+    direction TB
+    StateService[StateMappingService<br/>(merges signals & anchors)]
+    SessionService[SessionService<br/>(bootstrap from screenings -> graph)]
+    ConvService[ConversationService<br/>(turn pipeline)]
+    MiniBrain[MiniBrainClient<br/>(fast state-read + delta)]
+    TurnCoord[Turn Coordinator<br/>(language-shaper, arbiter, monitor, memory-curator)]
+    LangShaper[Language Shaper<br/>(pref-aware)]
+    Arbiter[Intervention Arbiter<br/>(gating rules)]
+    MemoryCurator[Memory Curator<br/>(update graph history & anchors)]
+    Counselor[Counselor Brain Client<br/>(final response)]
+    EmbeddingRepo[EmbeddingRepository (RAG)]
+  end
+
+  %% DATA PERSISTENCE
+  subgraph DB ["DB / Storage (Postgres)"]
+    direction TB
+    ConvState[conversation_state table<br/>(preferences JSON)]
+    Messages[messages table]
+    MemoryDocs[memory docs / embeddings]
+  end
+
+  %% Flows
+  API_Graph -->|fetch| StateService
+  API_Upsert -->|validate & upsert| StateService
+  StateService -->|persist| ConvState
+  StateService -->|return| API_Graph
+
+  API_Conversation --> ConvService
+  ConvService -->|retrieve relevant docs| EmbeddingRepo
+  ConvService -->|analyze turn| MiniBrain
+  MiniBrain -->|stateRead, stateDelta| ConvService
+  ConvService --> TurnCoord
+  TurnCoord --> LangShaper
+  TurnCoord --> Arbiter
+  TurnCoord --> MemoryCurator
+  TurnCoord -->|decision & language plan| ConvService
+  ConvService -->|call| Counselor
+  Counselor -->|reply| ConvService
+  ConvService -->|persist updated graph/signals| StateService
+  ConvService -->|persist message| Messages
+
+  %% Notes
+  classDef note fill:#f6f9ff,stroke:#c6d8ff;
+  Note[(Note: State mapping stored in preferences JSON — no DB migrations required)]:::note
+
+  %% File references (legend)
+  subgraph REFS ["Key files / types"]
+    direction LR
+    T1[shared/src/types/state-graph.type.ts]
+    R1[server/src/routes/state-mapping.route.ts]
+    S1[server/src/services/state-mapping.service.ts]
+    C1[server/src/services/conversation.service.ts]
+    A1[server/src/libs/ai/agents/*]
+    U1[client/src/features/welcome/pages/onboarding.page.tsx]
+  end
+```
+
+
+%% Sequence: a single turn (message) + onboarding hydration
+```mermaid
+sequenceDiagram
+  participant Client
+  participant API as Server API
+  participant State as StateMappingService
+  participant Conv as ConversationService
+  participant Mini as MiniBrain
+  participant Coord as TurnCoordinator
+  participant Lang as LanguageShaper
+  participant Arb as InterventionArbiter
+  participant Coun as Counselor
+  participant DB as DB (conversation_state)
+  participant Emb as EmbeddingRepository
+
+  Note over Client,State: Onboarding (pristine) request to /graph hydrates form
+  Client->>API: GET /api/state-mapping/graph
+  API->>State: getGraph(userId)
+  State-->>API: { graph, signals }
+  API-->>Client: 200 OK (graph + signals)
+
+  Note over Client,Conv: User sends message / voice input
+  Client->>API: POST /api/conversation {message}
+  API->>Conv: handleMessage
+  Conv->>DB: load conversation_state (preferences)
+  DB-->>Conv: preferences { userStateGraph, stateMappingSignals }
+  Conv->>Emb: findRelevant(userMessage)
+  Conv->>Mini: analyzeTurn({userMessage, recentMessages, currentState})
+  Mini-->>Conv: { stateRead, stateDelta, mood, riskLevel, suggestions }
+  Conv->>Coord: coordinateTurn({userMessage, graph, stateRead, signals})
+  Coord->>Lang: buildLanguageMirrorPlan(userText, {interactionPreference, willStatus})
+  Coord->>Arb: decideIntervention({stateRead, delta, graph, signals})
+  Coord-->>Conv: { languagePlan, decision, nextGraph }
+  Conv->>Coun: generateReply({systemInstruction, preferences, context})
+  Coun-->>Conv: { replyText, tags }
+  Conv->>DB: persist user message & updated preferences (nextGraph, updated signals)
+  Conv-->>Client: streaming reply / final reply
+```
+
+
+%% Component Detail: decision heuristics (short)
+```mermaid
+flowchart TB
+  subgraph heur [Intervention Heuristics]
+    flags[flags: agitationRising | cognitiveFragmentation | meaningMakingOnline]
+    will[willStatus: collapsed | strained | stable]
+    anchors[lifeAnchors present?]
+    flags -->|if true| grounding[Grounding Eligible]
+    will -->|collapsed/strained & low agency| grounding
+    anchors -->|futureContinuityThreatened| anchoring
+  end
+```
