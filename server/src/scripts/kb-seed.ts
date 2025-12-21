@@ -5,155 +5,126 @@ import { and, eq } from "drizzle-orm";
 
 const embeddingClient = new EmbeddingClient();
 
-// Severity Levels:
-// 0: General Info / Education
-// 1: Mild Distress / Prevention
-// 2: Moderate Distress / Coping
-// 3: Severe Distress / Intervention
-// 4: Crisis / Emergency
+// Severity Mapping for V2:
+// 0: Insight / Philosophy (The "Why")
+// 1: Coherence (The "What" - naming the pain)
+// 2: Agency (The "How" - small moves)
+// 3: Stabilization (The "Now" - surviving the spike)
+// 4: Preservation (The "Always" - keeping them alive)
 
 const KNOWLEDGE_BASE = [
-	// --- ANXIETY & GROUNDING ---
+	// --- STABILIZATION (Surviving the Spike) ---
 	{
-		topic: "Anxiety",
-		title: "The 5-4-3-2-1 Grounding Technique",
+		topic: "Stabilization",
+		title: "Sensory Anchoring",
 		content:
-			"A powerful grounding technique to regain control during high anxiety or dissociation. 1. Acknowledge 5 things you see. 2. Acknowledge 4 things you can touch. 3. Acknowledge 3 things you hear. 4. Acknowledge 2 things you can smell. 5. Acknowledge 1 thing you can taste. This engages the cortex and dampens the amygdala response.",
-		tags: ["grounding", "panic-attack", "dissociation", "somatic"],
-		minSeverity: 2,
-	},
-	{
-		topic: "Anxiety",
-		title: "Box Breathing",
-		content:
-			"A physiological reset for the nervous system using a 4-4-4-4 pattern. Inhale for 4 seconds, Hold for 4 seconds, Exhale for 4 seconds, Hold for 4 seconds. Repeat for at least 4 cycles. This stimulates the vagus nerve to reduce heart rate.",
-		tags: ["breathwork", "calming", "nervous-system", "physical"],
-		minSeverity: 1,
-	},
-	{
-		topic: "Anxiety",
-		title: "The TIPP Skill (DBT)",
-		content:
-			"For extreme distress (10/10 emotion): T - Temperature (Splash ice-cold water on your face to trigger the mammalian dive reflex). I - Intense Exercise (Sprint or jump for 60 seconds). P - Paced Breathing. P - Paired Muscle Relaxation. Use this when you cannot think clearly.",
-		tags: ["dbt", "crisis", "high-distress", "emergency"],
+			"When the world dissolves, find one solid thing. Do not count to 5. Just find *one* object—a table edge, a cold glass, the floor. Press your hand into it. Feel that it is solid. If that object is real, then you are real. Use the physical world to hold you when your mind cannot.",
+		tags: ["grounding", "dissociation", "reality-check", "panic"],
 		minSeverity: 3,
 	},
 	{
-		topic: "Anxiety",
-		title: "Catastrophizing",
+		topic: "Stabilization",
+		title: "Temperature Reset (The Dive)",
 		content:
-			"A cognitive distortion where you predict the worst possible outcome. Counter it with two questions: 'What is the evidence for this thought?' and 'If the worst happened, how would I cope?' Usually, the outcome is less severe than imagined.",
-		tags: ["cbt", "thinking-traps", "worry", "logic"],
-		minSeverity: 1,
-	},
-
-	// --- DEPRESSION & ACTIVATION ---
-	{
-		topic: "Depression",
-		title: "Behavioral Activation",
-		content:
-			"The 'Outside-In' approach to motivation. Do not wait to feel like doing it; do it to feel like it. Action precedes motivation. Start with 'Micro-Steps'—tasks so small you cannot fail (e.g., put on one shoe).",
-		tags: ["motivation", "lethargy", "routine", "action"],
-		minSeverity: 2,
-	},
-	{
-		topic: "Depression",
-		title: "The 'Should' Trap",
-		content:
-			"Depression uses 'should' statements ('I should be working'). This creates guilt. Replace 'should' with 'could' or 'choose'. 'Should' is a shackle; 'choose' is agency. Acknowledge that your capacity today is valid.",
-		tags: ["guilt", "self-talk", "reframing", "cbt"],
-		minSeverity: 1,
-	},
-	{
-		topic: "Depression",
-		title: "Opposite Action",
-		content:
-			"When an emotion (like sadness or fear) urges you to do something ineffective (like isolate or avoid), do the exact opposite. If you want to stay in bed, stand up. If you want to hide, send one text message.",
-		tags: ["dbt", "action", "behavior-change"],
-		minSeverity: 2,
-	},
-
-	// --- CBT CONCEPTS ---
-	{
-		topic: "CBT",
-		title: "All-or-Nothing Thinking",
-		content:
-			"Seeing things in binary: perfect or failure, loved or hated. Reality is usually in the gray area. Practice 'Dialectical Thinking': 'I can be struggling right now AND still be making progress.'",
-		tags: ["binary-thinking", "perfectionism", "nuance"],
-		minSeverity: 1,
-	},
-	{
-		topic: "CBT",
-		title: "Emotional Reasoning",
-		content:
-			"Believing that because you feel something, it must be a fact ('I feel stupid, so I am stupid'). Feelings are real experiences, but they are not always facts about reality. Validate the feeling, then check the facts.",
-		tags: ["feelings-vs-facts", "reality-check", "distortion"],
-		minSeverity: 1,
-	},
-
-	// --- SLEEP ---
-	{
-		topic: "Sleep",
-		title: "The 20-Minute Rule",
-		content:
-			"If you cannot sleep after 20 minutes, get out of bed. Do a boring, low-light activity (reading a manual, folding clothes) until sleepy. Bed must be associated with sleep, not tossing and turning.",
-		tags: ["insomnia", "sleep-hygiene", "rest"],
-		minSeverity: 1,
-	},
-	{
-		topic: "Sleep",
-		title: "Worry Time",
-		content:
-			"Schedule 15 minutes in the afternoon to worry. If a worry strikes at night, write it down and say 'I will worry about this tomorrow at 4 PM'. Keep the bedroom for rest.",
-		tags: ["worry", "planning", "insomnia"],
-		minSeverity: 1,
-	},
-
-	// --- SELF-WORTH ---
-	{
-		topic: "Self-Worth",
-		title: "Self-Compassion Break",
-		content:
-			"In a moment of failure, treat yourself like a friend. 1. Mindfulness: 'This is a moment of suffering.' 2. Common Humanity: 'Suffering is part of life; I am not alone.' 3. Self-Kindness: 'May I be kind to myself.'",
-		tags: ["compassion", "failure", "kindness"],
-		minSeverity: 1,
-	},
-	{
-		topic: "Self-Worth",
-		title: "Imposter Syndrome",
-		content:
-			"Feeling like a fraud despite success. Reframe: 'I am not an imposter; I am a learner in a new environment.' High achievers feel this because they push boundaries. It is a sign of growth.",
-		tags: ["work", "confidence", "growth"],
-		minSeverity: 1,
-	},
-
-	// --- CRISIS & SAFETY ---
-	{
-		topic: "Crisis",
-		title: "Urge Surfing",
-		content:
-			"Urges to self-harm or use substances are like waves. They rise, peak, and crash. You do not have to give in; you just have to ride it out. The peak intensity usually lasts only 20-30 minutes.",
-		tags: ["addiction", "self-harm", "impulse-control", "safety"],
+			"The brain cannot panic if the body thinks it is underwater. If the noise is too loud, splash ice-cold water on your face or hold an ice cube. It is not a trick; it is biology. It forces your heart rate down immediately. Reset the hardware so the software can reboot.",
+		tags: ["panic", "physiology", "emergency", "tip-skill"],
 		minSeverity: 3,
 	},
 	{
-		topic: "Crisis",
-		title: "Validating Pain",
+		topic: "Stabilization",
+		title: "The 20-Minute Wave",
 		content:
-			"Pain is valid. You do not need to fix it immediately. Acknowledge how hard it is right now. Connection precedes correction. You are allowed to not be okay.",
-		tags: ["validation", "empathy", "grief"],
+			"Suicidal urges feel permanent, but they are biological waves. Data shows the peak intensity rarely lasts longer than 20 minutes. Your only job right now is to wait 20 minutes. You do not have to solve your life today. You just have to endure this wave. It *will* break.",
+		tags: ["urge-surfing", "crisis", "endurance", "time"],
+		minSeverity: 4,
+	},
+
+	// --- COHERENCE (Validating the Logic of Pain) ---
+	{
+		topic: "Coherence",
+		title: "The Logic of Exhaustion",
+		content:
+			"You are not 'lazy' or 'broken.' You are functionally exhausted. Your brain is running a high-intensity survival simulation 24/7. Of course you are tired. The numbness you feel is not an absence of life; it is your system engaging an emergency brake to protect you from the fire. Respect the fatigue.",
+		tags: ["validation", "fatigue", "numbness", "depression"],
+		minSeverity: 1,
+	},
+	{
+		topic: "Coherence",
+		title: "The Night Spiral",
+		content:
+			"At 2 AM, the prefrontal cortex (logic) goes offline, but the amygdala (fear) stays awake. You are literally thinking with a different brain at night. The despair you feel right now is real, but the *conclusion* that 'it will never get better' is a chemical error caused by sleep pressure. Do not trust late-night philosophy.",
+		tags: ["sleep", "circadian-rhythm", "night-time", "insomnia"],
 		minSeverity: 2,
+	},
+	{
+		topic: "Coherence",
+		title: "Grief for the Living",
+		content:
+			"Sometimes we want to die not because we hate life, but because we are grieving the life we thought we would have. That gap—between expectation and reality—is painful. It is okay to mourn that gap. You are grieving a loss, even if no one died.",
+		tags: ["grief", "expectations", "sadness", "reframing"],
+		minSeverity: 1,
+	},
+
+	// --- AGENCY (Restoring Choice) ---
+	{
+		topic: "Agency",
+		title: "The Micro-Choice",
+		content:
+			"When you cannot control your future, control one inch of your present. You cannot fix your career today, but you can choose which mug to use. You can choose to sit or stand. Reclaiming agency starts with tiny, almost invisible choices. Prove to yourself that you are still the pilot.",
+		tags: ["control", "action", "helplessness", "small-steps"],
+		minSeverity: 2,
+	},
+	{
+		topic: "Agency",
+		title: "Opposite Action (The Override)",
+		content:
+			"Depression urges you to hide. Anxiety urges you to run. These are instincts, not commands. You have a manual override switch. If the urge says 'stay in bed,' the override says 'stand up for 10 seconds.' You don't have to enjoy it; you just have to prove you can defy the instinct.",
+		tags: ["behavioral-activation", "dbt", "willpower"],
+		minSeverity: 2,
+	},
+
+	// --- CONTINUITY (The Open Loop) ---
+	{
+		topic: "Continuity",
+		title: "The Unfinished Loop",
+		content:
+			"The brain hates open loops. You have books you haven't finished reading. Code you haven't deployed. Places you haven't seen. These are not trivial; they are threads tying you to the timeline. Death closes all loops. Staying alive keeps the possibility of the ending open.",
+		tags: ["meaning", "curiosity", "future", "purpose"],
+		minSeverity: 1,
+	},
+	{
+		topic: "Continuity",
+		title: "The Anchor Point",
+		content:
+			"An anchor is not a dream; it is a duty or a love that holds you here. A pet that needs feeding. A friend who needs a text. A garden that needs water. When you cannot live for yourself, it is valid to live for your anchors. Let them carry the weight for a while.",
+		tags: ["responsibility", "connection", "love", "anchors"],
+		minSeverity: 3,
+	},
+
+	// --- PURPOSE (Existential Meaning) ---
+	{
+		topic: "Purpose",
+		title: "Values vs. Goals",
+		content:
+			"A goal is 'getting the job.' A value is 'being a creator.' You can fail a goal, but you cannot lose a value. If you lost the job, you are still a creator. Shift your eyes from the lost goal to the enduring value. No circumstance can take your character away from you.",
+		tags: ["act", "identity", "failure", "resilience"],
+		minSeverity: 0,
+	},
+	{
+		topic: "Purpose",
+		title: "Meaning in Suffering",
+		content:
+			"Suffering is not a sign of failure. It is the price of deep feeling. If you feel pain, it means you are still connected to something you care about. Apathy is the enemy, not pain. Your pain is proof that you still value something.",
+		tags: ["logotherapy", "frankl", "meaning", "suffering"],
+		minSeverity: 0,
 	},
 ];
 
 async function seed() {
-	console.log(`Seeding ${KNOWLEDGE_BASE.length} KB articles`);
-
 	let count = 0;
 
 	for (const item of KNOWLEDGE_BASE) {
 		console.log(`Processing: ${item.title} (Topic: ${item.topic})`);
-
 		try {
 			const existing = await db
 				.select({ id: kbDocs.id })
@@ -179,11 +150,10 @@ async function seed() {
 
 			count++;
 		} catch (e) {
-			console.error(`❌ Failed to insert ${item.title}:`, e);
+			console.error(`failed to insert ${item.title}:`, e);
 		}
 	}
-
-	console.log(`✅ Successfully seeded ${count} documents!`);
+	console.log(`Successfully seeded ${count} documents!`);
 	process.exit(0);
 }
 
