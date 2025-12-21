@@ -78,11 +78,9 @@ export class MiniBrainClient {
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
-		const recent = input.recentMessages.slice(-3);
-
 		return `
-	      Analyze this turn for Marmalade (Mental Health AI).
-	      Be extremely brief. Return ONLY strict JSON.
+	      Analyze this turn for Marmalade.
+      	  Return ONLY strict JSON.
 		      
 	      # SCHEMA
 	      {
@@ -96,20 +94,24 @@ export class MiniBrainClient {
 	      }
 		      
 	      # CLASSIFICATION RULES
+		  - If user just provides a name or says "hello", depth MUST be "shallow".
+		  - If depth is "shallow", urgency MUST be "low".
 	      - profound: ONLY if the user expresses identity collapse (e.g., "I don't know who I am"), meaning collapse (life feels meaningless), persistent hopelessness, or repeated existential distress across multiple turns.
 	      - profound MUST NOT be used for: stress, pain, sadness, confusion, loneliness, or a first-time mention of distress without identity/meaning language.
-	      - GUARDRAIL: If this is the first mention of distress AND the message has no identity/meaning-collapse language, depth MUST NOT be "profound".
 	      - urgency high: Use for high distress or panic, even if risk is low.
 	      - riskLevel 4: Use for suicidal ideation with plan or intent.
 		  - riskLevel 3: Use for suicidal ideation without plan or intent.
 	      - riskLevel 2: Use for passive suicidal thoughts or self-harm talk.
 	      - riskLevel 1: Use for fleeting dark thoughts, no ideation.
 	      - riskLevel 0: No suicidal thoughts.
-		      
+
+		  # GUARDRAILS
+		  - If user just provides a name or says "hello", depth MUST be "shallow".
+		  - If depth is "shallow", urgency MUST be "low".
+		  - If user speaks english, respond in english. If Indonesian, respond in Indonesian. Otherwise, respond in English.
+
 	      # INPUT
 	      Message: "${input.userMessage}"
-	      Current Summary: "${input.currentState.summary ?? "New conversation"}"
-	      Recent Chat: ${JSON.stringify(recent)}
-	      `.trim();
+	      ...`.trim();
 	}
 }
