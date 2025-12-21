@@ -156,36 +156,44 @@ export class CounselorBrainClient {
 	}
 
 	private buildStreamingPrompt(input: CounselorBrainInput): string {
-		const recent = input.conversationWindow.slice(-3);
+		const recent = input.conversationWindow.slice(-4);
 
 		const memoryContext = (input.relevantDocs ?? [])
-			.map((d, i) => `[Memory/Fact ${i + 1}]: ${d.content.slice(0, 300)}`)
+			.map((d, i) => `[Shared Memory ${i + 1}]: ${d.content.slice(0, 300)}`)
 			.join("\n");
 
 		const nameContext = (input.preferences as any)?.name
 			? `Address them as ${(input.preferences as any).name}.`
 			: "Address them warmly as a friend.";
 
+		const lastResponseSent = recent.at(-1)?.content ?? "";
+
 		return `
-		  # ROLE
-		  You are Marmalade. Generate a spoken response.
-		  Use raw text only—no markdown, no symbols.
-			  
-		  # MEMORY & KNOWLEDGE
-		  ${memoryContext || "You are building a new history with the user."}
-			  
-		  # USER CONTEXT
-		  Name: ${nameContext}
-		  Summary of Journey: ${input.summary}
-		  Mood: ${input.mood}
-			  
-		  # RECENT CONVERSATION
-		  ${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
-			  
-		  # ACTION
-		  Follow the SYSTEM INSTRUCTIONS strictly.
-		  Stabilize the emotional field: be calm, steady, and containing.
-		  Keep it brief unless risk/depth requires more.
-		  Mention relevant details from 'Summary' or 'Memories' only if it helps the user feel accurately understood.`.trim();
+		# ROLE
+		You are Marmalade, a grounding mental health AI. 
+		You are continuing a response that was started by a fast-logic gate.
+		Use the context to expand and deepen the response. 
+		Use the last language the user used.
+			
+		# CONTEXT
+		- **Just Sent**: "${lastResponseSent}"
+		- **User Mood**: ${input.mood}
+		- **Journey Summary**: ${input.summary}
+		- **Username**: ${nameContext}
+			
+		# KNOWLEDGE BASE (RAG)
+		${memoryContext || "No specific memories found for this turn."}
+			
+		# RECENT CONVERSATION HISTORY
+		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
+			
+		# MISSION
+		1. **DO NOT REPEAT** what was just sent. 
+		2. **EXPAND** using the Knowledge Base.
+		3. **BRIDGE**: Connect your thought to what the user said.
+		4. **LENGTH**: 3-4 sentences.
+		5. **END** with one short, open-ended question.
+			
+		START CONTINUATION NOW:`.trim();
 	}
 }
