@@ -1,11 +1,20 @@
 import { users } from "./users.schema";
-import { screenings } from "./screenings.schema";
+import {
+	screenings,
+	screeningStatusEnum,
+	screeningGenderEnum,
+	screeningAgeRangeEnum,
+	screeningSleepQualityEnum,
+	screeningMedicationStatusEnum,
+	screeningSeverityEnum,
+	screeningRiskLevelEnum,
+} from "./screenings.schema";
 import { accounts, sessions, verifications } from "./auth.schema";
-import { conversationStates } from "./conversation-state.schema";
+import { conversationStates, moodEnum } from "./conversation-state.schema";
 import { voiceSessions } from "./voice-sessions.schema";
-import { messages } from "./messages.schema";
+import { messages, messageRoleEnum, voiceModeEnum } from "./messages.schema";
 import { riskLogs } from "./risk-logs.schema";
-import { userMemoryDocs } from "./user-memory-docs.schema";
+import { userMemoryDocs, memoryDocTypeEnum } from "./user-memory-docs.schema";
 import { kbDocs } from "./kb-docs.schema";
 
 export {
@@ -20,4 +29,15 @@ export {
 	riskLogs,
 	userMemoryDocs,
 	kbDocs,
+	memoryDocTypeEnum,
+	moodEnum,
+	messageRoleEnum,
+	voiceModeEnum,
+	screeningStatusEnum,
+	screeningGenderEnum,
+	screeningAgeRangeEnum,
+	screeningSleepQualityEnum,
+	screeningMedicationStatusEnum,
+	screeningSeverityEnum,
+	screeningRiskLevelEnum,
 };

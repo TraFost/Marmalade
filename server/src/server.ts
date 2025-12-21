@@ -9,6 +9,7 @@ import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
 import screeningsRoute from "./routes/screenings.route";
+import stateMappingRoute from "./routes/state-mapping.route";
 import sessionsRoute from "./routes/sessions.route";
 import messagesRoute from "./routes/messages.route";
 import hooksRoute from "./routes/hooks.route";
@@ -19,6 +20,7 @@ import { auth } from "./configs/auth.config";
 export function createApp() {
 	const api = new Hono()
 		.route("/screenings", screeningsRoute)
+		.route("/state-mapping", stateMappingRoute)
 		.route("/sessions", sessionsRoute)
 		.route("/messages", messagesRoute);
 
