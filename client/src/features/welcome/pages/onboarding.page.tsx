@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRightIcon, CaretLeftIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/shared/components/atoms/button";
@@ -10,20 +10,54 @@ import { PhysicalHealthStep } from "@/shared/components/organisms/onboarding/ste
 import { SelfAnalysisStep } from "@/shared/components/organisms/onboarding/steps/self-analysis.step";
 import { SpecialistPreferencesStep } from "@/shared/components/organisms/onboarding/steps/specialist-preferences.step";
 import { StepIndicatorList } from "@/shared/components/organisms/onboarding/steps/indicator.step";
-import {
-	useCompleteScreening,
-	useStartScreening,
-	useUpdateScreeningStepFour,
-	useUpdateScreeningStepOne,
-	useUpdateScreeningStepThree,
-	useUpdateScreeningStepTwo,
-} from "@/features/welcome/hooks/use-mutation.onboarding";
+import { useUpsertStateMapping } from "@/features/welcome/hooks/use-mutation.onboarding";
 import { useAuth } from "@/shared/hooks/use-auth.hook";
+import { useStateMappingGraph } from "@/features/welcome/hooks/use-query.onboarding";
+
+import { computeQuickDassScores } from "@/features/welcome/services/api.onboarding";
 
 import type {
 	OnboardingFormData,
 	OnboardingStepDefinition,
 } from "@/features/welcome/types/onboarding.type";
+
+const GENDERS = ["male", "female", "other"] as const;
+const AGE_RANGES = [
+	"16-20",
+	"20-30",
+	"30-40",
+	"40-50",
+	"50-60",
+	"60+",
+] as const;
+const SLEEP_QUALITIES = [
+	"ideal",
+	"good",
+	"acceptable",
+	"not_enough",
+	"critically_low",
+	"no_sleep_mode",
+] as const;
+const MEDICATION_STATUSES = ["regular", "sometimes", "none"] as const;
+const WILL_STATUSES = ["stable", "strained", "collapsed", "unclear"] as const;
+const INTERACTION_PREFERENCES = ["direct", "soft", "analytical"] as const;
+
+const PSYCHOLOGIST_YES_ANCHOR = "Has seen a psychologist before";
+const PSYCHOLOGIST_NO_ANCHOR = "Has not seen a psychologist before";
+
+const isOneOf = <T extends readonly string[]>(
+	values: T,
+	value: unknown
+): value is T[number] =>
+	typeof value === "string" && (values as readonly string[]).includes(value);
+
+const getResumeStepIndex = (data: OnboardingFormData) => {
+	const firstIncomplete = STEP_DEFINITIONS.findIndex(
+		(step) => !step.validate(data)
+	);
+	if (firstIncomplete === -1) return TOTAL_STEPS - 1;
+	return Math.min(Math.max(firstIncomplete, 0), TOTAL_STEPS - 1);
+};
 
 const STEP_DEFINITIONS: OnboardingStepDefinition[] = [
 	{
@@ -62,7 +96,12 @@ const STEP_DEFINITIONS: OnboardingStepDefinition[] = [
 		subTitle: "Goals and history",
 		component: SpecialistPreferencesStep,
 		validate: (data) =>
-			data.hasSeenPsychologist !== null && data.goals.length > 0,
+			data.hasSeenPsychologist !== null &&
+			data.goals.length > 0 &&
+			data.willStatus !== null &&
+			data.interactionPreference !== null &&
+			data.lifeAnchors.length > 0 &&
+			data.painQualia.trim().length > 0,
 	},
 ];
 
@@ -82,6 +121,11 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 		restDifficulty: null,
 		irritability: null,
 	},
+	willStatus: null,
+	lifeAnchors: [],
+	unfinishedLoops: "",
+	painQualia: "",
+	interactionPreference: null,
 	hasSeenPsychologist: null,
 	goals: [],
 };
@@ -89,39 +133,19 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 const TOTAL_STEPS = STEP_DEFINITIONS.length;
 
 export function OnboardingPage() {
-	const { user } = useAuth();
+	useAuth();
+	const graphQuery = useStateMappingGraph();
 	const [currentStep, setCurrentStep] = useState(0);
 	const [formData, setFormData] =
 		useState<OnboardingFormData>(INITIAL_FORM_DATA);
-	const [formFilled, setFormFilled] = useState(false);
-	const [screeningId, setScreeningId] = useState<string | null>(null);
+	const hasHydratedRef = useRef(false);
 
 	const stepConfig = STEP_DEFINITIONS[currentStep];
 	const StepComponent = stepConfig.component;
 	const canProceed = stepConfig.validate(formData);
 	const isLastStep = currentStep === TOTAL_STEPS - 1;
 
-	const startMutation = useStartScreening(user?.user?.id);
-	const stepOneMutation = useUpdateScreeningStepOne({
-		screeningId: screeningId || "",
-		userId: user?.user?.id,
-	});
-	const stepTwoMutation = useUpdateScreeningStepTwo({
-		screeningId: screeningId || "",
-		userId: user?.user?.id,
-	});
-	const stepThreeMutation = useUpdateScreeningStepThree({
-		screeningId: screeningId || "",
-		userId: user?.user?.id,
-	});
-	const stepFourMutation = useUpdateScreeningStepFour({
-		screeningId: screeningId || "",
-		userId: user?.user?.id,
-	});
-	const completeMutation = useCompleteScreening({
-		screeningId: screeningId || "",
-		userId: user?.user?.id,
-	});
+	const upsertMutation = useUpsertStateMapping();
 
 	const progressPercent = useMemo(
 		() => ((currentStep + 1) / TOTAL_STEPS) * 100,
@@ -157,42 +181,143 @@ export function OnboardingPage() {
 		}));
 	};
 
+	useEffect(() => {
+		if (hasHydratedRef.current) return;
+		const signals = graphQuery.data?.signals;
+		const anchors = graphQuery.data?.graph?.anchors;
+		if (!signals && !anchors) return;
+
+		hasHydratedRef.current = true;
+		setFormData((previous) => {
+			const isPristine =
+				previous.gender === null &&
+				previous.ageRange === null &&
+				previous.sleepQuality === null &&
+				previous.medicationStatus === null &&
+				previous.happinessScore === null &&
+				previous.positiveSources.length === 0 &&
+				Object.values(previous.dassScores).every((v) => v === null) &&
+				previous.willStatus === null &&
+				previous.lifeAnchors.length === 0 &&
+				previous.unfinishedLoops.trim().length === 0 &&
+				previous.painQualia.trim().length === 0 &&
+				previous.interactionPreference === null &&
+				previous.hasSeenPsychologist === null &&
+				previous.goals.length === 0 &&
+				(previous.medicationNotes ?? "") === "";
+
+			if (!isPristine) return previous;
+
+			const anchorValues = Array.isArray(anchors?.values)
+				? anchors.values
+				: null;
+			const nextPositiveSources = Array.isArray(anchorValues)
+				? anchorValues.filter(
+						(v) => v !== PSYCHOLOGIST_YES_ANCHOR && v !== PSYCHOLOGIST_NO_ANCHOR
+				  )
+				: previous.positiveSources;
+
+			const hasSeenPsychologistFromAnchors = Array.isArray(anchorValues)
+				? anchorValues.includes(PSYCHOLOGIST_YES_ANCHOR)
+					? true
+					: anchorValues.includes(PSYCHOLOGIST_NO_ANCHOR)
+					? false
+					: previous.hasSeenPsychologist
+				: previous.hasSeenPsychologist;
+
+			const nextGender = isOneOf(GENDERS, signals?.profile?.gender)
+				? signals?.profile?.gender
+				: previous.gender;
+			const nextAgeRange = isOneOf(AGE_RANGES, signals?.profile?.ageRange)
+				? signals?.profile?.ageRange
+				: previous.ageRange;
+			const nextSleepQuality = isOneOf(SLEEP_QUALITIES, signals?.sleepQuality)
+				? signals?.sleepQuality
+				: previous.sleepQuality;
+			const nextMedicationStatus = isOneOf(
+				MEDICATION_STATUSES,
+				signals?.medicationStatus
+			)
+				? signals?.medicationStatus
+				: previous.medicationStatus;
+
+			const nextWillStatus = isOneOf(WILL_STATUSES, signals?.willStatus)
+				? signals?.willStatus
+				: previous.willStatus;
+			const nextInteractionPreference = isOneOf(
+				INTERACTION_PREFERENCES,
+				signals?.interactionPreference
+			)
+				? signals?.interactionPreference
+				: previous.interactionPreference;
+
+			const hydrated: OnboardingFormData = {
+				...previous,
+				gender: nextGender,
+				ageRange: nextAgeRange,
+				sleepQuality: nextSleepQuality,
+				medicationStatus: nextMedicationStatus,
+				medicationNotes:
+					typeof signals?.medicationNotes === "string"
+						? signals.medicationNotes
+						: previous.medicationNotes,
+				happinessScore: signals?.happinessScore ?? previous.happinessScore,
+				positiveSources: nextPositiveSources,
+				goals: Array.isArray(anchors?.goals) ? anchors.goals : previous.goals,
+				lifeAnchors: Array.isArray(anchors?.lifeAnchors)
+					? anchors.lifeAnchors
+					: previous.lifeAnchors,
+				willStatus: nextWillStatus,
+				interactionPreference: nextInteractionPreference,
+				painQualia:
+					typeof signals?.painQualia === "string"
+						? signals.painQualia
+						: previous.painQualia,
+				unfinishedLoops:
+					typeof signals?.unfinishedLoops === "string"
+						? signals.unfinishedLoops
+						: previous.unfinishedLoops,
+				hasSeenPsychologist: hasSeenPsychologistFromAnchors,
+			};
+
+			setCurrentStep(getResumeStepIndex(hydrated));
+			return hydrated;
+		});
+	}, [graphQuery.data]);
+
 	const goToStep = (nextIndex: number) => {
 		setCurrentStep(() => Math.min(Math.max(nextIndex, 0), TOTAL_STEPS - 1));
-		setFormFilled(false);
 	};
 
-	console.log(screeningId, "id");
-
 	const persistStep = async () => {
-		if (!screeningId) {
-			const started = await startMutation.mutateAsync();
-			setScreeningId(started.id);
-			return;
-		}
-
 		switch (currentStep + 1) {
 			case 1:
-				await stepOneMutation.mutateAsync({
-					gender: formData.gender!,
-					ageRange: formData.ageRange!,
+				await upsertMutation.mutateAsync({
+					signals: {
+						profile: {
+							gender: formData.gender,
+							ageRange: formData.ageRange,
+						},
+					},
 				});
 				return;
 			case 2:
-				await stepTwoMutation.mutateAsync({
-					sleepQuality: formData.sleepQuality!,
-					medicationStatus: formData.medicationStatus!,
-					medicationNotes: formData.medicationNotes || null,
+				await upsertMutation.mutateAsync({
+					signals: {
+						sleepQuality: formData.sleepQuality,
+						medicationStatus: formData.medicationStatus,
+						medicationNotes: formData.medicationNotes,
+					},
 				});
 				return;
 			case 3:
-				await stepThreeMutation.mutateAsync({
-					happinessScore: formData.happinessScore!,
-					positiveSources: formData.positiveSources,
+				await upsertMutation.mutateAsync({
+					signals: { happinessScore: formData.happinessScore },
+					anchors: { values: formData.positiveSources },
 				});
 				return;
-			case 4:
-				await stepFourMutation.mutateAsync({
+			case 4: {
+				const scores = computeQuickDassScores({
 					flatJoy: formData.dassScores.flatJoy!,
 					motivation: formData.dassScores.motivation!,
 					physicalAnxiety: formData.dassScores.physicalAnxiety!,
@@ -200,11 +325,28 @@ export function OnboardingPage() {
 					restDifficulty: formData.dassScores.restDifficulty!,
 					irritability: formData.dassScores.irritability!,
 				});
+				await upsertMutation.mutateAsync({
+					signals: { dass: scores },
+				});
 				return;
+			}
 			case 5:
-				await completeMutation.mutateAsync({
-					hasSeenPsychologist: Boolean(formData.hasSeenPsychologist),
-					goals: formData.goals,
+				await upsertMutation.mutateAsync({
+					signals: {
+						willStatus: formData.willStatus,
+						unfinishedLoops: formData.unfinishedLoops,
+						painQualia: formData.painQualia,
+						interactionPreference: formData.interactionPreference,
+					},
+					anchors: {
+						goals: formData.goals,
+						lifeAnchors: formData.lifeAnchors,
+						values: [
+							formData.hasSeenPsychologist
+								? PSYCHOLOGIST_YES_ANCHOR
+								: PSYCHOLOGIST_NO_ANCHOR,
+						],
+					},
 				});
 				return;
 			default:
@@ -218,7 +360,6 @@ export function OnboardingPage() {
 		await persistStep();
 
 		if (isLastStep) {
-			setFormFilled(true);
 			console.info("Marmalade onboarding complete", formData);
 			return;
 		}
@@ -227,7 +368,6 @@ export function OnboardingPage() {
 	};
 
 	const handleBack = () => {
-		setFormFilled(false);
 		setCurrentStep((previous) => Math.max(previous - 1, 0));
 	};
 
