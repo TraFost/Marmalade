@@ -280,7 +280,9 @@ export class ConversationService {
 			chunkSize?: number;
 		}
 	): AsyncGenerator<string, void, void> {
-		const bufferText = options?.bufferText ?? "Let me think about that... ";
+		const bufferText =
+			options?.bufferText ??
+			(userMessage.length > 50 ? "That's a lot to process... " : "");
 		const chunkSize = options?.chunkSize ?? 48;
 
 		if (bufferText) yield bufferText;
