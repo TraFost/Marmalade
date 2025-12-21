@@ -1,6 +1,6 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
 import type { OnboardingStepProps } from "../onboarding.types";
-import type { InteractionPreference, WillStatus } from "../onboarding.types";
+import type { InteractionPreference, WillStatus } from "shared";
 
 const HISTORY_OPTIONS = [
 	{ label: "Yes", value: true },
@@ -8,12 +8,12 @@ const HISTORY_OPTIONS = [
 ] as const;
 
 const GOAL_OPTIONS = [
-	"Reduce stress and lift your mood",
-	"Overcome fears and anxiety",
-	"Find the best version of yourself",
-	"Build healthier relationships",
-	"Build a healthier eating habit",
-	"Other",
+	"Understand the 'Why' behind my pain",
+	"Reclaim small bits of control",
+	"Find grounding when I'm overwhelmed",
+	"Remember why I should stay",
+	"Explore my values and purpose",
+	"Deal with something that's stuck",
 ] as const;
 
 const WILL_STATUS_OPTIONS: {
@@ -49,18 +49,18 @@ const INTERACTION_PREFERENCES: {
 	value: InteractionPreference;
 }[] = [
 	{
-		label: "Direct",
-		description: "Clear, practical, no fluff",
-		value: "direct",
-	},
-	{
-		label: "Soft",
-		description: "Gentle, validating, slow pace",
+		label: "Steady & Gentle",
+		description: "Focus on validation and safety. No pressure to act.",
 		value: "soft",
 	},
 	{
-		label: "Analytical",
-		description: "Patterns, frameworks, cause/effect",
+		label: "Practical Partner",
+		description: "Focus on micro-choices and reclaiming agency.",
+		value: "direct",
+	},
+	{
+		label: "Deep Perspective",
+		description: "Focus on patterns, philosophy, and the logic of pain.",
 		value: "analytical",
 	},
 ];
@@ -77,7 +77,7 @@ export function SpecialistPreferencesStep({
 	onUpdateField,
 }: OnboardingStepProps) {
 	return (
-		<div className="space-y-10">
+		<div className="space-y-10 overflow-y-auto max-h-[70vh] pr-5 pb-3">
 			<OnboardingSection title="Did you ever seek help from a psychologist?">
 				<div className="grid gap-3 sm:grid-cols-2">
 					{HISTORY_OPTIONS.map((option) => (
@@ -112,21 +112,6 @@ export function SpecialistPreferencesStep({
 						</OnboardingTile>
 					))}
 				</div>
-			</OnboardingSection>
-
-			<OnboardingSection
-				title="What are your life anchors?"
-				description="A few people, values, places, or commitments that keep you here. One per line (up to 10)."
-			>
-				<textarea
-					rows={4}
-					placeholder="Example: My little sister\nFinishing my degree\nBeing honest with myself"
-					className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
-					value={formData.lifeAnchors.join("\n")}
-					onChange={(event) =>
-						onUpdateField("lifeAnchors", parseList(event.target.value))
-					}
-				/>
 			</OnboardingSection>
 
 			<OnboardingSection
@@ -191,19 +176,36 @@ export function SpecialistPreferencesStep({
 			</OnboardingSection>
 
 			<OnboardingSection
-				title="Any unfinished loops?"
-				description="Optional: anything unresolved that keeps pulling your mind back."
+				title="What are your life anchors?"
+				description="A few people, values, places, or commitments that keep you here. One per line (up to 10)."
 			>
 				<textarea
 					rows={4}
-					placeholder="Example: A conversation I keep replaying"
+					placeholder="Example: My little sister, finishing my degree, finishing what i started, putting food on the table for my family"
 					className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
-					value={formData.unfinishedLoops}
+					value={formData.lifeAnchors.join("\n")}
 					onChange={(event) =>
-						onUpdateField("unfinishedLoops", event.target.value)
+						onUpdateField("lifeAnchors", parseList(event.target.value))
 					}
 				/>
 			</OnboardingSection>
+
+			{formData.goals.includes("Deal with something that's stuck") && (
+				<OnboardingSection
+					title="Anything else that's hard to let go of?"
+					description="A memory, a 'what if', or an argument that feels stuck. Marmalade can help you process these."
+				>
+					<textarea
+						rows={4}
+						placeholder="Example: A conversation I keep replaying in my head..."
+						className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
+						value={formData.unfinishedLoops}
+						onChange={(event) =>
+							onUpdateField("unfinishedLoops", event.target.value)
+						}
+					/>
+				</OnboardingSection>
+			)}
 		</div>
 	);
 }
