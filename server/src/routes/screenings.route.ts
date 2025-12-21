@@ -6,6 +6,7 @@ import {
 } from "../libs/middlewares/auth.middleware";
 import { zValidator } from "../libs/middlewares/zod.middleware";
 import { ScreeningService } from "../services/screening.service";
+import { StateMappingService } from "../services/state-mapping.service";
 import {
 	stepOneSchema,
 	stepTwoSchema,
@@ -17,6 +18,7 @@ import { handleError } from "../libs/helper/error.helper";
 import { successWithData, failure } from "../libs/helper/response.helper";
 
 const screeningsService = new ScreeningService();
+const stateMappingService = new StateMappingService();
 
 const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	.use("*", authMiddleware)
@@ -40,9 +42,17 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	})
 	.put("/:id/step/1", zValidator("json", stepOneSchema), async (c) => {
 		try {
+			const user = c.get("user");
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepOne(id, body);
+			if (user?.id) {
+				await stateMappingService.upsert(user.id, {
+					signals: {
+						profile: { gender: body.gender, ageRange: body.ageRange },
+					},
+				});
+			}
 			return c.json(
 				successWithData("Step one saved", {
 					id,
@@ -56,9 +66,18 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	})
 	.put("/:id/step/2", zValidator("json", stepTwoSchema), async (c) => {
 		try {
+			const user = c.get("user");
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepTwo(id, body);
+			if (user?.id) {
+				await stateMappingService.upsert(user.id, {
+					signals: {
+						sleepQuality: body.sleepQuality,
+						medicationStatus: body.medicationStatus,
+					},
+				});
+			}
 			return c.json(
 				successWithData("Step two saved", {
 					id,
@@ -73,9 +92,16 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	})
 	.put("/:id/step/3", zValidator("json", stepThreeSchema), async (c) => {
 		try {
+			const user = c.get("user");
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const updated = await screeningsService.updateStepThree(id, body);
+			if (user?.id) {
+				await stateMappingService.upsert(user.id, {
+					signals: { happinessScore: body.happinessScore },
+					anchors: { values: body.positiveSources },
+				});
+			}
 			return c.json(
 				successWithData("Step three saved", {
 					id,
@@ -90,12 +116,24 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	})
 	.put("/:id/step/4", zValidator("json", stepFourSchema), async (c) => {
 		try {
+			const user = c.get("user");
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const { updated, dassSummary } = await screeningsService.updateStepFour(
 				id,
 				body
 			);
+			if (user?.id) {
+				await stateMappingService.upsert(user.id, {
+					signals: {
+						dass: {
+							depressionScore: dassSummary.depressionScore,
+							anxietyScore: dassSummary.anxietyScore,
+							stressScore: dassSummary.stressScore,
+						},
+					},
+				});
+			}
 			return c.json(
 				successWithData("Step four saved", {
 					id,
@@ -111,9 +149,15 @@ const screeningsRoute = new Hono<{ Variables: AuthContext }>()
 	})
 	.put("/:id/step/5", zValidator("json", stepFiveSchema), async (c) => {
 		try {
+			const user = c.get("user");
 			const id = c.req.param("id");
 			const body = c.req.valid("json");
 			const completed = await screeningsService.completeStepFive(id, body);
+			if (user?.id) {
+				await stateMappingService.upsert(user.id, {
+					anchors: { goals: body.goals },
+				});
+			}
 			return c.json(
 				successWithData("Screening completed", {
 					id,
