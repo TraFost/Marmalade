@@ -26,7 +26,7 @@ const featureHighlights: FeatureHighlight[] = [
 	{
 		title: "Emotional Baseline",
 		description:
-			"Integrates DASS-21 screening to understand where you are starting from.",
+			"Integrates short check-ins (including DASS-21) to understand where you are starting from.",
 		icon: ClipboardText,
 	},
 	{

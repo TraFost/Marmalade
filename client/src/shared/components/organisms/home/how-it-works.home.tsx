@@ -2,7 +2,7 @@ const howItWorksSteps = [
 	{
 		title: "Check-in",
 		description:
-			"Take a DASS-21 screening to help Marmalade understand your emotional baseline.",
+			"Do a quick check-in (sleep, mood, DASS-21) so Marmalade can understand your baseline.",
 	},
 	{
 		title: "Talk",
