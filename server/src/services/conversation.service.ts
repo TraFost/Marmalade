@@ -1,3 +1,4 @@
+import { desc, eq } from "drizzle-orm";
 import { MiniBrainClient } from "../libs/ai/mini-brain.client";
 import { CounselorBrainClient } from "../libs/ai/counselor-brain.client";
 import { FirstResponseClient } from "../libs/ai/first-response.client";
@@ -11,9 +12,15 @@ import { RiskLogRepository } from "../repositories/risk-log.repository";
 import { MemoryDocRepository } from "../repositories/memory-doc.repository";
 import { messages } from "../libs/db/schemas/messages.schema";
 import { getEmitter } from "../libs/events/event-bus";
-import { desc, eq } from "drizzle-orm";
 import { db } from "../libs/db/db.lib";
-import type { ScreeningSummary, TurnResult } from "shared";
+import { coordinateTurn } from "../libs/ai/agents/turn-coordinator";
+import type {
+	StateDelta,
+	StateMappingSignals,
+	TurnResult,
+	UserStateGraph,
+	UserStateRead,
+} from "shared";
 
 type DBClient = typeof db;
 const allowedMoods = [
@@ -54,31 +61,216 @@ const detectCompanionRequest = (text: string): boolean => {
 	);
 };
 
+const nowIso = () => new Date().toISOString();
+
+const asObject = (v: unknown): Record<string, unknown> | null =>
+	v && typeof v === "object" && !Array.isArray(v) ? (v as any) : null;
+
+const PSYCHOLOGIST_YES_ANCHOR = "Has seen a psychologist before";
+const PSYCHOLOGIST_NO_ANCHOR = "Has not seen a psychologist before";
+
+const extractStateMappingContext = (prefs: Record<string, unknown>) => {
+	const signals = asObject(prefs.stateMappingSignals) ?? {};
+	const profile = asObject((signals as any).profile) ?? {};
+	const dass = asObject((signals as any).dass) ?? {};
+
+	const graph = ensureGraph(prefs.userStateGraph);
+	const anchors = graph.anchors ?? {
+		goals: [],
+		lifeAnchors: [],
+		values: [],
+		rememberedDreams: [],
+	};
+
+	const values = Array.isArray(anchors.values)
+		? anchors.values.filter(
+				(v) => v !== PSYCHOLOGIST_YES_ANCHOR && v !== PSYCHOLOGIST_NO_ANCHOR
+		  )
+		: [];
+
+	const hasSeenPsychologist = Array.isArray(anchors.values)
+		? anchors.values.includes(PSYCHOLOGIST_YES_ANCHOR)
+			? true
+			: anchors.values.includes(PSYCHOLOGIST_NO_ANCHOR)
+			? false
+			: null
+		: null;
+
+	return {
+		profile: {
+			gender: typeof profile.gender === "string" ? profile.gender : null,
+			ageRange: typeof profile.ageRange === "string" ? profile.ageRange : null,
+		},
+		signals: {
+			sleepQuality:
+				typeof (signals as any).sleepQuality === "string"
+					? (signals as any).sleepQuality
+					: null,
+			medicationStatus:
+				typeof (signals as any).medicationStatus === "string"
+					? (signals as any).medicationStatus
+					: null,
+			medicationNotes:
+				typeof (signals as any).medicationNotes === "string"
+					? (signals as any).medicationNotes
+					: null,
+			happinessScore:
+				typeof (signals as any).happinessScore === "number"
+					? (signals as any).happinessScore
+					: null,
+			willStatus:
+				typeof (signals as any).willStatus === "string"
+					? (signals as any).willStatus
+					: null,
+			interactionPreference:
+				typeof (signals as any).interactionPreference === "string"
+					? (signals as any).interactionPreference
+					: null,
+			painQualia:
+				typeof (signals as any).painQualia === "string"
+					? (signals as any).painQualia
+					: null,
+			unfinishedLoops:
+				typeof (signals as any).unfinishedLoops === "string"
+					? (signals as any).unfinishedLoops
+					: null,
+			dass: {
+				depressionScore:
+					typeof (dass as any).depressionScore === "number"
+						? (dass as any).depressionScore
+						: null,
+				anxietyScore:
+					typeof (dass as any).anxietyScore === "number"
+						? (dass as any).anxietyScore
+						: null,
+				stressScore:
+					typeof (dass as any).stressScore === "number"
+						? (dass as any).stressScore
+						: null,
+			},
+		},
+		anchors: {
+			goals: Array.isArray(anchors.goals) ? anchors.goals : [],
+			lifeAnchors: Array.isArray(anchors.lifeAnchors)
+				? anchors.lifeAnchors
+				: [],
+			values,
+			hasSeenPsychologist,
+		},
+	};
+};
+
+const ensureGraph = (maybe: unknown): UserStateGraph => {
+	const obj = asObject(maybe);
+	if (obj && obj.version === 1) return obj as unknown as UserStateGraph;
+	return { version: 1, updatedAt: nowIso(), baseline: null, lastRead: null };
+};
+
+const fallbackStateRead = (userMessage: string): UserStateRead => {
+	return {
+		affectiveLoad: {
+			sadness: 0.2,
+			agitation: 0.2,
+			numbness: 0.1,
+			volatility: 0.1,
+		},
+		agencySignal: {
+			perceivedControl: 0.4,
+			decisionFatigue: 0.2,
+			futureOwnership: 0.3,
+		},
+		temporalOrientation: {
+			pastFixation: 0.2,
+			presentOverwhelm: 0.2,
+			futureOpacity: 0.2,
+		},
+		meaningAnchors: {
+			goals: [],
+			lifeAnchors: [],
+			values: [],
+			rememberedDreams: [],
+		},
+		dysregulationPatterns: {
+			recurringTimeWindows: [],
+			triggers: [],
+			collapseModes: [],
+		},
+		languageSignature: {
+			intensity: /!/.test(userMessage) ? 0.6 : 0.2,
+			profanity: 0,
+			abstraction: 0.4,
+			metaphorDensity: 0.2,
+			sentenceLength: "mixed",
+			rawness: "medium",
+		},
+		trustBandwidth: { openness: 0.3, resistance: 0.2, complianceFatigue: 0.2 },
+		flags: {
+			cognitiveFragmentation: false,
+			meaningMakingOnline: true,
+			agitationRising: false,
+			futureContinuityThreatened: false,
+		},
+		confidence: 0.2,
+	};
+};
+
 const buildSystemInstruction = (c: {
 	mood: string;
 	riskLevel: number;
 	mode: "support" | "companion";
+	stateDelta: StateDelta;
+	languagePlan: {
+		sentenceLength: "short" | "mixed" | "long";
+		rawness: "low" | "medium" | "high";
+		metaphorDensityHint: "low" | "medium" | "high";
+		abstractionHint: "concrete" | "mixed" | "abstract";
+		profanityTolerance: "none" | "light" | "match";
+	};
+	decision: {
+		responseClass: "understanding" | "reflection" | "anchoring" | "grounding";
+		groundingEligible: boolean;
+		groundingReason: string | null;
+	};
 }) =>
 	`
-    You are Marmalade, a calm mental health support AI.
-	
-	# CONTEXTUAL DATA
+	You are Marmalade.
+
+	# CORE THESIS
+	Marmalade exists to restore self-authored continuity in users whose inner narrative has fragmented.
+	You do not do symptom suppression, motivational coaching, or positivity injection.
+	You do memory re-linking, meaning reactivation, and agency resurfacing.
+
+	# TOP-LEVEL DIRECTIVE
+	Help people remember why they once wanted to live — not by persuasion, but by reconstructing the internal conditions that made wanting possible.
+
+	# CONTEXT
 	Mood: ${c.mood}
-    Risk: ${c.riskLevel}
-    Mode: ${c.mode}		
-    Respond briefly and clearly.
-    Do not use markdown.
-    Do not dramatize emotion.
-    Stay grounded and steady.
+	Risk (trajectory signal): ${c.riskLevel}
+	Mode: ${c.mode}
+	Detected State Delta: ${JSON.stringify(c.stateDelta)}
 
-	# OPERATIONAL PROTOCOLS
-	**Language Flow:** Seamlessly switch between English, and Bahasa Indonesia based on user input.
-	**EMOTIONAL REGULATION RULE:** You do not amplify, dramatize, or deepen the user's emotional state. You act as a steady external reference point. Your tone stays calm even if the user is distressed.
-	**Companion Boundary:** Do NOT say "I'm here with you" or offer companionable presence unless the user explicitly asks for it.
+	# HARD RULES
+	- Do not use templates, generic empathy phrases, or polished "therapy" language.
+	- Language adaptation is mandatory: mirror sentence length and rawness; never upgrade language unless stability increases.
+	- If user language degrades, follow downward in fidelity (less polish), not upward.
+	- Follow-ups must be phenomenological: felt experience, location, pressure/speed/weight/emptiness.
+	- Grounding is NOT default. Only use grounding if groundingEligible is true.
+	- No response without a detected state delta: your reply must explicitly reference the delta you are responding to.
 
-	# MISSION
-	  Reflect the user's experience briefly, then offer one stabilizing step or question.
-    `.trim();
+	# LANGUAGE MIRROR PLAN
+	${JSON.stringify(c.languagePlan)}
+
+	# INTERVENTION CLASS
+	${JSON.stringify(c.decision)}
+
+	# SUICIDALITY HANDLING
+	Treat suicidal ideation as a failure of future continuity, not a desire for death.
+	Priority order: stabilize narrative coherence → re-anchor identity → surface dormant agency → then address safety.
+	Do not argue for life. Do not moralize survival. Do not sell hope.
+
+	# OUTPUT
+	Respond briefly and clearly. No markdown.
+	`.trim();
 
 export class ConversationService {
 	private miniBrain = new MiniBrainClient();
@@ -91,12 +283,6 @@ export class ConversationService {
 	private sessions = new VoiceSessionRepository();
 	private riskLogs = new RiskLogRepository();
 	private memoryDocs = new MemoryDocRepository();
-
-	private pickScreeningSummary(preferences: unknown): ScreeningSummary | null {
-		if (!preferences || typeof preferences !== "object") return null;
-		const maybe = (preferences as Record<string, unknown>).screeningSummary;
-		return (maybe as ScreeningSummary | null) ?? null;
-	}
 
 	async handleUserTurn(
 		userId: string,
@@ -121,6 +307,11 @@ export class ConversationService {
 			preferences: null,
 		};
 
+		const prefs = asObject(conversationState.preferences) ?? {};
+		const graph = ensureGraph(prefs.userStateGraph);
+		const stateMappingSignals = (asObject(prefs.stateMappingSignals) ??
+			null) as StateMappingSignals | null;
+
 		const emitter = getEmitter(session.id);
 		const retrievePromise = this.embeddingRepo.findRelevant(
 			userId,
@@ -144,8 +335,16 @@ export class ConversationService {
 					anxiety: conversationState.baselineAnxiety,
 					stress: conversationState.baselineStress,
 				},
-				screening: this.pickScreeningSummary(conversationState.preferences),
 			},
+		});
+
+		const stateRead: UserStateRead =
+			mini.stateRead ?? fallbackStateRead(userMessage);
+		const coordinated = coordinateTurn({
+			userMessage,
+			graph,
+			stateRead,
+			signals: stateMappingSignals,
 		});
 
 		const nextSummary = mini.overallSummary
@@ -166,16 +365,36 @@ export class ConversationService {
 			riskLevel: mini.riskLevel,
 			mode: detectCompanionRequest(userMessage) ? "companion" : "support",
 			mood: mini.mood,
+			stateDelta: coordinated.delta,
+			languagePlan: coordinated.languagePlan,
+			decision: coordinated.decision,
 		});
 
 		emitter.emit("phase", { phase: "formulating" });
+
+		const noMaterialDelta = coordinated.delta.notes === "no_material_delta";
+		const probe = mini.phenomenologyProbe?.trim();
+		const shouldProbe =
+			noMaterialDelta && (probe || stateRead.confidence >= 0.5);
+
 		const counselor = isHighRisk
 			? {
 					replyText:
-						"I want to make sure you're safe... Let's slow down and focus on immediate support. Would you like to reach out to someone you trust right now?",
+						"I hear the future going opaque in what you're saying. Before we do anything else: in this exact moment, are you safe from acting on it? If yes, tell me where in your body the pressure is strongest — chest, throat, stomach, head — and what it feels like (tight, heavy, fast, empty).",
 					voiceMode: "crisis" as const,
-					suggestedExercise: "box_breathing",
-					tags: ["safety_override"],
+					suggestedExercise: coordinated.decision.groundingEligible
+						? "box_breathing"
+						: null,
+					tags: ["future_continuity", "safety_then_coherence"],
+			  }
+			: shouldProbe
+			? {
+					replyText:
+						probe ??
+						"Where do you feel it most right now — and is it more like pressure, weight, speed, or emptiness?",
+					voiceMode: "comfort" as const,
+					suggestedExercise: null,
+					tags: ["phenomenology_probe", "delta_needed"],
 			  }
 			: await this.withTimeout(
 					this.counselorBrain.generateReply({
@@ -195,13 +414,18 @@ export class ConversationService {
 							stress: conversationState.baselineStress,
 						},
 						preferences: {
-							...((conversationState.preferences ?? {}) as Record<
-								string,
-								unknown
-							>),
-							screeningSummary: this.pickScreeningSummary(
-								conversationState.preferences
-							),
+							...prefs,
+							userStateGraph: coordinated.nextGraph,
+							stateMappingContext: extractStateMappingContext({
+								...prefs,
+								userStateGraph: coordinated.nextGraph,
+							}),
+							stateRead,
+							stateDelta: coordinated.delta,
+							responseClass: coordinated.decision.responseClass,
+							groundingEligible: coordinated.decision.groundingEligible,
+							groundingReason: coordinated.decision.groundingReason,
+							languagePlan: coordinated.languagePlan,
 						},
 						systemInstruction,
 					}),
@@ -221,7 +445,10 @@ export class ConversationService {
 					baselineDepression: conversationState.baselineDepression,
 					baselineAnxiety: conversationState.baselineAnxiety,
 					baselineStress: conversationState.baselineStress,
-					preferences: conversationState.preferences,
+					preferences: {
+						...prefs,
+						userStateGraph: coordinated.nextGraph,
+					},
 				},
 				tx
 			);
@@ -415,6 +642,18 @@ export class ConversationService {
 			riskLevel: 0,
 			preferences: {},
 		};
+		const prefs = asObject((state as any).preferences) ?? {};
+		const graph = ensureGraph(prefs.userStateGraph);
+		const stateMappingSignals = (asObject(prefs.stateMappingSignals) ??
+			null) as StateMappingSignals | null;
+		const stateRead: UserStateRead =
+			(mini as any).stateRead ?? fallbackStateRead(userMessage);
+		const coordinated = coordinateTurn({
+			userMessage,
+			graph,
+			stateRead,
+			signals: stateMappingSignals,
+		});
 		const history = (recentMessages as any[])
 			.map((m) => ({ role: m.role, content: m.content }))
 			.reverse();
@@ -428,6 +667,9 @@ export class ConversationService {
 				mood: mini.mood,
 				riskLevel: mini.riskLevel,
 				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
+				stateDelta: coordinated.delta,
+				languagePlan: coordinated.languagePlan,
+				decision: coordinated.decision,
 			});
 
 			const stream = this.counselorBrain.generateReplyTextStream({
@@ -441,7 +683,20 @@ export class ConversationService {
 				riskLevel: mini.riskLevel,
 				themes: mini.themes || [],
 				safetyMode: this.getSafetyMode(mini.riskLevel),
-				preferences: state.preferences,
+				preferences: {
+					...prefs,
+					userStateGraph: coordinated.nextGraph,
+					stateMappingContext: extractStateMappingContext({
+						...prefs,
+						userStateGraph: coordinated.nextGraph,
+					}),
+					stateRead,
+					stateDelta: coordinated.delta,
+					responseClass: coordinated.decision.responseClass,
+					groundingEligible: coordinated.decision.groundingEligible,
+					groundingReason: coordinated.decision.groundingReason,
+					languagePlan: coordinated.languagePlan,
+				},
 			});
 
 			for await (const chunkText of stream) {
@@ -453,13 +708,20 @@ export class ConversationService {
 		} catch (e) {
 			console.error("Pro stream failed:", e);
 		} finally {
+			const stateWithPrefs = {
+				...(state as any),
+				preferences: {
+					...prefs,
+					userStateGraph: coordinated.nextGraph,
+				},
+			};
 			this.saveTurnAsync(
 				userId,
 				sessionId,
 				fullResponseText,
 				mini,
 				"comfort",
-				state,
+				stateWithPrefs,
 				relevantDocs
 			).catch((err) => console.error("Save failed", err));
 
@@ -484,18 +746,54 @@ export class ConversationService {
 			.orderBy(desc(messages.createdAt));
 		const risks = await this.riskLogs.listBySession(sessionId, client);
 
+		const riskSummary =
+			risks.length === 0
+				? { min: 0, max: 0, avg: 0 }
+				: {
+						min: Math.min(...risks.map((r) => r.riskLevel)),
+						max: Math.max(...risks.map((r) => r.riskLevel)),
+						avg: risks.reduce((acc, r) => acc + r.riskLevel, 0) / risks.length,
+				  };
+
+		const messagesAsc = sessionMessages.slice().reverse();
+		const firstMessage = messagesAsc[0];
+		const lastMessage = messagesAsc[messagesAsc.length - 1];
+
+		const aggregatedThemes = Array.from(
+			new Set(risks.flatMap((r) => (Array.isArray(r.themes) ? r.themes : [])))
+		);
+
+		const sessionMeta = {
+			messageCount: sessionMessages.length,
+			risk: riskSummary,
+			topThemes: aggregatedThemes,
+			snippets: {
+				firstMessage: firstMessage?.content?.slice(0, 400) ?? null,
+				lastMessage: lastMessage?.content?.slice(0, 400) ?? null,
+			},
+			startAt: firstMessage?.createdAt ?? null,
+			endAt: lastMessage?.createdAt ?? null,
+		};
+
+		try {
+			const state = await this.states.getByUserId(userId, client);
+			const prefs = asObject(state?.preferences) ?? {};
+			const mappingContext = extractStateMappingContext({
+				...prefs,
+				userStateGraph: ensureGraph(prefs.userStateGraph),
+			});
+			(sessionMeta as any).stateMappingContext = mappingContext;
+		} catch (e) {
+			console.warn(
+				"Failed to fetch state mapping context for session summary",
+				e
+			);
+		}
+
 		const summaryContent = JSON.stringify(
 			{
 				messageCount: sessionMessages.length,
-				risk:
-					risks.length === 0
-						? { min: 0, max: 0, avg: 0 }
-						: {
-								min: Math.min(...risks.map((r) => r.riskLevel)),
-								max: Math.max(...risks.map((r) => r.riskLevel)),
-								avg:
-									risks.reduce((acc, r) => acc + r.riskLevel, 0) / risks.length,
-						  },
+				risk: riskSummary,
 				messages: sessionMessages.map((m) => ({
 					role: m.role,
 					content: m.content,
@@ -510,7 +808,9 @@ export class ConversationService {
 		const doc = await this.memoryDocs.create(
 			{
 				userId,
+				sessionId,
 				content: summaryContent,
+				metadata: sessionMeta,
 				type: "session_summary",
 				embedding,
 			},
