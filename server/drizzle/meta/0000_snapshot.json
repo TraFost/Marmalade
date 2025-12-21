@@ -1,5 +1,5 @@
 {
-  "id": "a2f69945-da0a-4d6d-b644-8e6038538dbe",
+  "id": "44517997-e5dd-4561-a27c-d8be7c944480",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -126,6 +126,357 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.conversation_state": {
+      "name": "conversation_state",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mood": {
+          "name": "mood",
+          "type": "conversation_mood",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "risk_level": {
+          "name": "risk_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_themes": {
+          "name": "last_themes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_depression": {
+          "name": "baseline_depression",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_anxiety": {
+          "name": "baseline_anxiety",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_stress": {
+          "name": "baseline_stress",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preferences": {
+          "name": "preferences",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "conversation_state_user_id_users_id_fk": {
+          "name": "conversation_state_user_id_users_id_fk",
+          "tableFrom": "conversation_state",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kb_docs": {
+      "name": "kb_docs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "topic": {
+          "name": "topic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_severity": {
+          "name": "min_severity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "vector(768)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.messages": {
+      "name": "messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "message_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_audio_ref": {
+          "name": "raw_audio_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voice_mode": {
+          "name": "voice_mode",
+          "type": "voice_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "risk_at_turn": {
+          "name": "risk_at_turn",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "themes": {
+          "name": "themes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "messages_user_id_users_id_fk": {
+          "name": "messages_user_id_users_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messages_session_id_voice_sessions_id_fk": {
+          "name": "messages_session_id_voice_sessions_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "voice_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.risk_logs": {
+      "name": "risk_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risk_level": {
+          "name": "risk_level",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mood": {
+          "name": "mood",
+          "type": "conversation_mood",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "themes": {
+          "name": "themes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "risk_logs_user_id_users_id_fk": {
+          "name": "risk_logs_user_id_users_id_fk",
+          "tableFrom": "risk_logs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "risk_logs_session_id_voice_sessions_id_fk": {
+          "name": "risk_logs_session_id_voice_sessions_id_fk",
+          "tableFrom": "risk_logs",
+          "tableTo": "voice_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.screenings": {
       "name": "screenings",
       "schema": "",
@@ -145,7 +496,8 @@
         },
         "status": {
           "name": "status",
-          "type": "text",
+          "type": "screening_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'in_progress'"
@@ -172,25 +524,29 @@
         },
         "gender": {
           "name": "gender",
-          "type": "text",
+          "type": "screening_gender",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "age_range": {
           "name": "age_range",
-          "type": "text",
+          "type": "screening_age_range",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "sleep_quality": {
           "name": "sleep_quality",
-          "type": "text",
+          "type": "screening_sleep_quality",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "medication_status": {
           "name": "medication_status",
-          "type": "text",
+          "type": "screening_medication_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -268,19 +624,22 @@
         },
         "dass_depression_level": {
           "name": "dass_depression_level",
-          "type": "text",
+          "type": "screening_severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "dass_anxiety_level": {
           "name": "dass_anxiety_level",
-          "type": "text",
+          "type": "screening_severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "dass_stress_level": {
           "name": "dass_stress_level",
-          "type": "text",
+          "type": "screening_severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -298,7 +657,8 @@
         },
         "risk_level": {
           "name": "risk_level",
-          "type": "text",
+          "type": "screening_risk_level",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -427,6 +787,104 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_memory_docs": {
+      "name": "user_memory_docs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "memory_doc_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "embedding": {
+          "name": "embedding",
+          "type": "vector(768)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_memory_docs_user_id_users_id_fk": {
+          "name": "user_memory_docs_user_id_users_id_fk",
+          "tableFrom": "user_memory_docs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memory_docs_session_id_voice_sessions_id_fk": {
+          "name": "user_memory_docs_session_id_voice_sessions_id_fk",
+          "tableFrom": "user_memory_docs",
+          "tableTo": "voice_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -563,9 +1021,223 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.voice_sessions": {
+      "name": "voice_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_risk_level": {
+          "name": "max_risk_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "message_count": {
+          "name": "message_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_url": {
+          "name": "audio_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary_doc_id": {
+          "name": "summary_doc_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "voice_sessions_user_id_users_id_fk": {
+          "name": "voice_sessions_user_id_users_id_fk",
+          "tableFrom": "voice_sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "voice_sessions_summary_doc_id_user_memory_docs_id_fk": {
+          "name": "voice_sessions_summary_doc_id_user_memory_docs_id_fk",
+          "tableFrom": "voice_sessions",
+          "tableTo": "user_memory_docs",
+          "columnsFrom": [
+            "summary_doc_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.memory_doc_type": {
+      "name": "memory_doc_type",
+      "schema": "public",
+      "values": [
+        "session_summary",
+        "long_summary",
+        "coping_insight",
+        "life_anchor",
+        "unfinished_loop",
+        "phenomenology_probe",
+        "goal",
+        "pain_qualia"
+      ]
+    },
+    "public.message_role": {
+      "name": "message_role",
+      "schema": "public",
+      "values": [
+        "user",
+        "assistant"
+      ]
+    },
+    "public.conversation_mood": {
+      "name": "conversation_mood",
+      "schema": "public",
+      "values": [
+        "unknown",
+        "calm",
+        "sad",
+        "anxious",
+        "angry",
+        "numb",
+        "mixed"
+      ]
+    },
+    "public.screening_age_range": {
+      "name": "screening_age_range",
+      "schema": "public",
+      "values": [
+        "16-20",
+        "20-30",
+        "30-40",
+        "40-50",
+        "50-60",
+        "60+"
+      ]
+    },
+    "public.screening_gender": {
+      "name": "screening_gender",
+      "schema": "public",
+      "values": [
+        "male",
+        "female",
+        "other"
+      ]
+    },
+    "public.screening_medication_status": {
+      "name": "screening_medication_status",
+      "schema": "public",
+      "values": [
+        "regular",
+        "sometimes",
+        "none"
+      ]
+    },
+    "public.screening_risk_level": {
+      "name": "screening_risk_level",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "public.screening_severity": {
+      "name": "screening_severity",
+      "schema": "public",
+      "values": [
+        "normal",
+        "mild",
+        "moderate",
+        "severe",
+        "extremely_severe"
+      ]
+    },
+    "public.screening_sleep_quality": {
+      "name": "screening_sleep_quality",
+      "schema": "public",
+      "values": [
+        "ideal",
+        "good",
+        "acceptable",
+        "not_enough",
+        "critically_low",
+        "no_sleep_mode"
+      ]
+    },
+    "public.screening_status": {
+      "name": "screening_status",
+      "schema": "public",
+      "values": [
+        "in_progress",
+        "completed"
+      ]
+    },
+    "public.voice_mode": {
+      "name": "voice_mode",
+      "schema": "public",
+      "values": [
+        "comfort",
+        "coach",
+        "educational",
+        "crisis"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},
