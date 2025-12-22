@@ -124,9 +124,7 @@ export class CounselorBrainClient {
 		return counselorResponseSchema.parse(parsed);
 	}
 
-	async *generateReplyTextStream(
-		input: CounselorBrainInput
-	): AsyncGenerator<
+	async *generateReplyTextStream(input: CounselorBrainInput): AsyncGenerator<
 		{
 			text: string;
 			usage?: {
@@ -139,7 +137,7 @@ export class CounselorBrainClient {
 		void
 	> {
 		const model = this.vertex.getGenerativeModel({
-			model: env.VERTEX_COUNSELOR_MODEL,
+			model: env.VERTEX_MINI_MODEL,
 			systemInstruction: {
 				parts: [{ text: input.systemInstruction }],
 				role: "system",
