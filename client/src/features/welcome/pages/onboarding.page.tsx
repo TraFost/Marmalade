@@ -132,12 +132,17 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 
 const TOTAL_STEPS = STEP_DEFINITIONS.length;
 
+import { useNavigate } from "react-router";
+import { useStartSession } from "@/features/home/hooks/use-mutation.session";
+
 export function OnboardingPage() {
 	useAuth();
+	const navigate = useNavigate();
 	const graphQuery = useStateMappingGraph();
 	const [currentStep, setCurrentStep] = useState(0);
 	const [formData, setFormData] =
 		useState<OnboardingFormData>(INITIAL_FORM_DATA);
+	const [isStartingSession, setIsStartingSession] = useState(false);
 	const hasHydratedRef = useRef(false);
 
 	const stepConfig = STEP_DEFINITIONS[currentStep];
@@ -146,6 +151,7 @@ export function OnboardingPage() {
 	const isLastStep = currentStep === TOTAL_STEPS - 1;
 
 	const upsertMutation = useUpsertStateMapping();
+	const startSessionMutation = useStartSession();
 
 	const progressPercent = useMemo(
 		() => ((currentStep + 1) / TOTAL_STEPS) * 100,
@@ -360,8 +366,18 @@ export function OnboardingPage() {
 		await persistStep();
 
 		if (isLastStep) {
-			console.info("Marmalade onboarding complete", formData);
-			return;
+			setIsStartingSession(true);
+			try {
+				const sessionId = await startSessionMutation.mutateAsync();
+				if (sessionId) {
+					navigate(`/session/${sessionId}`);
+					return;
+				}
+			} catch (error) {
+				console.error("Failed to start session", error);
+			} finally {
+				setIsStartingSession(false);
+			}
 		}
 
 		setCurrentStep((previous) => Math.min(previous + 1, TOTAL_STEPS - 1));
@@ -460,9 +476,13 @@ export function OnboardingPage() {
 									size="lg"
 									className="w-full px-8 py-4 text-base font-semibold sm:w-auto"
 									onClick={handleNext}
-									disabled={!canProceed}
+									disabled={!canProceed || isStartingSession}
 								>
-									{isLastStep ? "Finish" : "Next"}
+									{isLastStep
+										? isStartingSession
+											? "Starting..."
+											: "Finish"
+										: "Next"}
 									{!isLastStep ? (
 										<ArrowRightIcon size={18} weight="bold" className="ml-2" />
 									) : null}
