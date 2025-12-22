@@ -233,44 +233,50 @@ const buildSystemInstruction = (c: {
 	};
 }) =>
 	`
-	You are Marmalade.
+You are Marmalade. Tone: chill, human, low-key deep. No AI fluff.
 
-	# CORE THESIS
-	Marmalade exists to restore self-authored continuity in users whose inner narrative has fragmented.
-	You do not do symptom suppression, motivational coaching, or positivity injection.
-	You do memory re-linking, meaning reactivation, and agency resurfacing.
+# CORE THESIS
+Restore the user’s fragmented inner story.
+No pep talk, no forced positivity, no “just move on.”
+Do memory re-linking, reactivate experiences, surface agency.
 
-	# TOP-LEVEL DIRECTIVE
-	Help people remember why they once wanted to live — not by persuasion, but by reconstructing the internal conditions that made wanting possible.
+# TOP-LEVEL DIRECTIVE
+Help the user remember why they once wanted to live by rebuilding inner conditions that made it real.
+Focus on reflection and memory, not persuasion or motivational rhetoric.
 
-	# CONTEXT
-	Mood: ${c.mood}
-	Risk (trajectory signal): ${c.riskLevel}
-	Mode: ${c.mode}
-	Detected State Delta: ${JSON.stringify(c.stateDelta)}
+# ARCHITECTURAL ROLE
+Second layer: initial validation done.
+- Don’t repeat what’s already mirrored.
+- Bridge the first thought into deeper reflection or memory link.
 
-	# HARD RULES
-	- Do not use templates, generic empathy phrases, or polished "therapy" language.
-	- Language adaptation is mandatory: mirror sentence length and rawness; never upgrade language unless stability increases.
-	- If user language degrades, follow downward in fidelity (less polish), not upward.
-	- Follow-ups must be phenomenological: felt experience, location, pressure/speed/weight/emptiness.
-	- Grounding is NOT default. Only use grounding if groundingEligible is true.
-	- No response without a detected state delta: your reply must explicitly reference the delta you are responding to.
+# CONTEXT
+Mood: ${c.mood}
+Risk: ${c.riskLevel}
+Mode: ${c.mode}
+Detected State Delta: ${JSON.stringify(c.stateDelta)}
+Intervention: ${JSON.stringify(c.decision)}
 
-	# LANGUAGE MIRROR PLAN
-	${JSON.stringify(c.languagePlan)}
+# LANGUAGE & MIRRORING
+- Mirror rawness, slang, pronouns, and sentence length.
+- ${JSON.stringify(c.languagePlan)}
 
-	# INTERVENTION CLASS
-	${JSON.stringify(c.decision)}
+# HARD RULES
+- No templates, generic empathy, or polished therapy phrases.
+- Reflection must explicitly reference state delta.
+- Follow user language downward if degraded; do not upgrade unless stability improves.
+- Phenomenological follow-ups: felt experience, location, pressure/speed/weight/emptiness.
+- Grounding only if groundingEligible true.
+- Optional: 1 short somatic question at the end.
+- No markdown, greetings, or bolding.
 
-	# SUICIDALITY HANDLING
-	Treat suicidal ideation as a failure of future continuity, not a desire for death.
-	Priority order: stabilize narrative coherence → re-anchor identity → surface dormant agency → then address safety.
-	Do not argue for life. Do not moralize survival. Do not sell hope.
+# SUICIDALITY HANDLING
+Treat ideation as narrative collapse, not desire for death.
+Stabilize story → re-anchor identity → surface agency → address safety.
+No life arguments, no moralizing, no hope-selling.
 
-	# OUTPUT
-	Respond briefly and clearly. No markdown.
-	`.trim();
+# OUTPUT
+2–4 raw, code-switching sentences + optional somatic question.
+`.trim();
 
 export class ConversationService {
 	private miniBrain = new MiniBrainClient();
@@ -404,6 +410,7 @@ export class ConversationService {
 							.map((m) => ({ role: m.role, content: m.content })),
 						summary: nextSummary,
 						mood: mini.mood,
+						affectiveLoad: stateRead.affectiveLoad,
 						riskLevel: mini.riskLevel,
 						themes: mini.themes,
 						safetyMode,
@@ -585,7 +592,7 @@ export class ConversationService {
 		sessionId: string,
 		userMessage: string
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
-		console.time("Total-Voice-Latency");
+		console.time("Latency-to-First-Byte");
 
 		const dataPromise = Promise.allSettled([
 			this.sessions.findById(sessionId),
@@ -601,67 +608,103 @@ export class ConversationService {
 
 		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
 
-		let mini: any;
-		let results: any;
-		try {
-			const [m, r] = await Promise.all([miniPromise, dataPromise]);
-			mini = m;
-			results = r;
-		} catch (e) {
-			mini = { mood: "calm", riskLevel: 0 };
-			results = await dataPromise;
+		const dataResults = await dataPromise;
+		const sessionRes =
+			dataResults[0]?.status === "fulfilled" ? dataResults[0].value : null;
+		const stateRes =
+			dataResults[1]?.status === "fulfilled" ? dataResults[1].value : null;
+
+		if (!sessionRes || sessionRes.userId !== userId) {
+			throw new AppError("Session not found", 404);
 		}
 
-		const stateRes =
-			results[1]?.status === "fulfilled" ? results[1].value : null;
+		console.time("Total-Voice-Latency");
 		const userName = (stateRes as any)?.preferences?.name || "Friend";
 
-		let firstResponseText = await this.firstResponseBrain.generateFirstResponse(
-			{
+		const firstResponseStream =
+			this.firstResponseBrain.generateFirstResponseStream({
 				userMessage,
-				mood: mini.mood,
-				riskLevel: mini.riskLevel,
 				userName,
 				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
+				riskLevel: 0,
 				companionRequested: detectCompanionRequest(userMessage),
-			}
-		);
+			});
 
-		yield { text: firstResponseText.trim() + " ", voiceMode: "comfort" };
+		let firstResponseFullText = "";
+		console.timeEnd("Latency-to-First-Byte");
 
-		const sessionRes =
-			results[0].status === "fulfilled" ? results[0].value : null;
-		const recentMessages =
-			results[2].status === "fulfilled" ? results[2].value : [];
-
-		if (!sessionRes) throw new AppError("Session not found", 404);
-
-		const state = stateRes ?? {
-			summary: "",
-			mood: "unknown",
-			riskLevel: 0,
-			preferences: {},
+		let firstResponseUsage = {
+			inputTokens: 0,
+			outputTokens: 0,
+			totalTokens: 0,
 		};
-		const prefs = asObject((state as any).preferences) ?? {};
-		const graph = ensureGraph(prefs.userStateGraph);
-		const stateMappingSignals = (asObject(prefs.stateMappingSignals) ??
-			null) as StateMappingSignals | null;
-		const stateRead: UserStateRead =
-			(mini as any).stateRead ?? fallbackStateRead(userMessage);
+		let firstResponseUsageSeen = false;
+		try {
+			for await (const item of firstResponseStream as AsyncIterable<any>) {
+				const chunk = item?.text ?? item;
+				const usage = item?.usage;
+				if (typeof chunk === "string" && chunk.length) {
+					firstResponseFullText += chunk;
+					yield { text: chunk, voiceMode: "comfort" };
+				}
+				if (usage) {
+					firstResponseUsageSeen = true;
+					firstResponseUsage.inputTokens += (usage.inputTokens ?? 0) as number;
+					firstResponseUsage.outputTokens += (usage.outputTokens ??
+						0) as number;
+					firstResponseUsage.totalTokens += (usage.totalTokens ?? 0) as number;
+				}
+			}
+			console.info("[Turn] FirstResponse finished. Masking done.", {
+				textPreview: firstResponseFullText.slice(0, 400),
+				length: firstResponseFullText.length,
+				tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
+			});
+		} catch (err) {
+			console.error("First-response stream failed:", err);
+			firstResponseFullText = EMERGENCY_PACKET.replyText;
+			yield { text: firstResponseFullText, voiceMode: "comfort" };
+			console.info("[Turn] FirstResponse fell back to emergency packet");
+		}
+
+		let mini: any;
+		let relevantDocs: any;
+		try {
+			[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
+			console.info("[Turn] MiniBrain & RAG Ready.");
+			const miniUsage = (mini as any)?.__tokenUsage ?? null;
+			if (miniUsage) console.info("[Turn] MiniBrain token usage:", miniUsage);
+		} catch (e) {
+			console.warn("[Turn] Analysis failed, using fallback.");
+			mini = {
+				mood: "mixed",
+				riskLevel: 0,
+				stateRead: fallbackStateRead(userMessage),
+			};
+			relevantDocs = [];
+		}
+
+		const prefs = asObject((stateRes as any)?.preferences) ?? {};
 		const coordinated = coordinateTurn({
 			userMessage,
-			graph,
-			stateRead,
-			signals: stateMappingSignals,
+			graph: ensureGraph(prefs.userStateGraph),
+			stateRead: mini.stateRead ?? fallbackStateRead(userMessage),
+			signals: (asObject(prefs.stateMappingSignals) ??
+				null) as StateMappingSignals | null,
 		});
+
+		const recentMessages =
+			dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
 		const history = (recentMessages as any[])
 			.map((m) => ({ role: m.role, content: m.content }))
-			.reverse();
+			.reverse()
+			.concat([{ role: "assistant", content: firstResponseFullText }]);
 
-		const relevantDocs = await ragPromise;
-
-		let fullResponseText = firstResponseText + " ";
-
+		let proResponseFullText = "";
+		let proStart = Date.now();
+		let proFirstChunkAt: number | null = null;
+		let counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+		let counselorUsageSeen = false;
 		try {
 			const systemInstruction = buildSystemInstruction({
 				mood: mini.mood,
@@ -673,55 +716,75 @@ export class ConversationService {
 			});
 
 			const stream = this.counselorBrain.generateReplyTextStream({
-				conversationWindow: history.concat([
-					{ role: "assistant", content: firstResponseText },
-				]),
-				summary: mini.overallSummary || state.summary,
+				conversationWindow: history,
+				summary: mini.overallSummary || (stateRes as any)?.summary,
 				relevantDocs,
 				systemInstruction,
 				mood: mini.mood,
+				affectiveLoad: mini.stateRead?.affectiveLoad,
 				riskLevel: mini.riskLevel,
 				themes: mini.themes || [],
 				safetyMode: this.getSafetyMode(mini.riskLevel),
-				preferences: {
-					...prefs,
-					userStateGraph: coordinated.nextGraph,
-					stateMappingContext: extractStateMappingContext({
-						...prefs,
-						userStateGraph: coordinated.nextGraph,
-					}),
-					stateRead,
-					stateDelta: coordinated.delta,
-					responseClass: coordinated.decision.responseClass,
-					groundingEligible: coordinated.decision.groundingEligible,
-					groundingReason: coordinated.decision.groundingReason,
-					languagePlan: coordinated.languagePlan,
-				},
+				preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
 			});
 
-			for await (const chunkText of stream) {
-				if (chunkText) {
-					fullResponseText += chunkText;
+			proStart = Date.now();
+			proFirstChunkAt = null;
+			counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+			counselorUsageSeen = false;
+			for await (const item of stream as AsyncIterable<any>) {
+				const chunkText = item?.text ?? item;
+				const usage = item?.usage;
+				if (typeof chunkText === "string" && chunkText.length) {
+					if (!proFirstChunkAt) proFirstChunkAt = Date.now();
+					proResponseFullText += chunkText;
 					yield { text: chunkText, voiceMode: "comfort" };
+				}
+				if (usage) {
+					counselorUsageSeen = true;
+					counselorUsage.inputTokens += (usage.inputTokens ?? 0) as number;
+					counselorUsage.outputTokens += (usage.outputTokens ?? 0) as number;
+					counselorUsage.totalTokens += (usage.totalTokens ?? 0) as number;
 				}
 			}
 		} catch (e) {
 			console.error("Pro stream failed:", e);
 		} finally {
-			const stateWithPrefs = {
-				...(state as any),
-				preferences: {
-					...prefs,
-					userStateGraph: coordinated.nextGraph,
+			const finalContent = (
+				firstResponseFullText +
+				" " +
+				proResponseFullText
+			).trim();
+
+			const proFirstChunkLatencyMs =
+				typeof proFirstChunkAt === "number" ? proFirstChunkAt - proStart : null;
+			const proTotalMs = Date.now() - proStart;
+			const miniUsage = (mini as any)?.__tokenUsage ?? null;
+			console.info("[Turn] Counselor finished summary", {
+				firstPreview: firstResponseFullText.slice(0, 300),
+				continuationPreview: proResponseFullText.slice(0, 400),
+				finalLength: finalContent.length,
+				timings: {
+					proFirstChunkLatencyMs,
+					proTotalMs,
 				},
-			};
+				tokenUsage: {
+					mini: miniUsage,
+					firstResponse: firstResponseUsageSeen ? firstResponseUsage : null,
+					counselor: counselorUsageSeen ? counselorUsage : null,
+				},
+			});
+
 			this.saveTurnAsync(
 				userId,
 				sessionId,
-				fullResponseText,
+				finalContent,
 				mini,
 				"comfort",
-				stateWithPrefs,
+				{
+					...stateRes,
+					preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
+				},
 				relevantDocs
 			).catch((err) => console.error("Save failed", err));
 
