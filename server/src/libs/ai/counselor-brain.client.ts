@@ -14,6 +14,7 @@ export type CounselorBrainInput = {
 		anxiety?: number | null;
 		stress?: number | null;
 	};
+	affectiveLoad?: { numbness?: number | null } | null;
 	relevantDocs?: { source: string; content: string; type?: string | null }[];
 	safetyMode: "normal" | "caution" | "high_caution" | "crisis";
 	preferences?: Record<string, unknown> | null;
@@ -66,6 +67,51 @@ export class CounselorBrainClient {
 			],
 		});
 
+		const extractTokenUsage = (obj: any) => {
+			try {
+				const resp = obj?.response ?? obj ?? {};
+				const candidateMeta = (resp?.candidates?.[0] as any)?.metadata ?? {};
+				const metadata = resp?.metadata ?? {};
+				return {
+					inputTokens:
+						candidateMeta.inputTokens ??
+						candidateMeta.input_tokens ??
+						metadata.input_tokens ??
+						metadata.inputTokens ??
+						resp?.usage?.input_tokens ??
+						null,
+					outputTokens:
+						candidateMeta.outputTokens ??
+						candidateMeta.output_tokens ??
+						metadata.output_tokens ??
+						metadata.outputTokens ??
+						resp?.usage?.output_tokens ??
+						null,
+					totalTokens:
+						candidateMeta.totalTokens ??
+						candidateMeta.total_tokens ??
+						metadata.total_tokens ??
+						metadata.totalTokens ??
+						resp?.usage?.total_tokens ??
+						null,
+				};
+			} catch (err) {
+				return null;
+			}
+		};
+
+		try {
+			const tokenMeta = res?.response ?? null;
+			console.info("[AI][Counselor] Vertex response (trimmed):", {
+				candidates: (tokenMeta?.candidates ?? []).length,
+				metadata: (tokenMeta as any)?.metadata ?? null,
+			});
+			const usage = extractTokenUsage(res);
+			if (usage) console.info("[AI][Counselor] token usage:", usage);
+		} catch (logErr) {
+			console.warn("[AI][Counselor] Failed to log Vertex response:", logErr);
+		}
+
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 		let parsed: unknown;
 		try {
@@ -80,7 +126,18 @@ export class CounselorBrainClient {
 
 	async *generateReplyTextStream(
 		input: CounselorBrainInput
-	): AsyncGenerator<string, void, void> {
+	): AsyncGenerator<
+		{
+			text: string;
+			usage?: {
+				inputTokens?: number;
+				outputTokens?: number;
+				totalTokens?: number;
+			};
+		},
+		void,
+		void
+	> {
 		const model = this.vertex.getGenerativeModel({
 			model: env.VERTEX_COUNSELOR_MODEL,
 			systemInstruction: {
@@ -105,9 +162,46 @@ export class CounselorBrainClient {
 		});
 
 		for await (const chunk of res.stream) {
+			let usage:
+				| { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+				| undefined;
+			try {
+				const itemMeta = (chunk?.candidates?.[0] as any)?.metadata ?? null;
+				if (itemMeta) {
+					usage = {
+						inputTokens:
+							itemMeta.inputTokens ??
+							itemMeta.input_tokens ??
+							itemMeta?.usage?.input_tokens ??
+							null,
+						outputTokens:
+							itemMeta.outputTokens ??
+							itemMeta.output_tokens ??
+							itemMeta?.usage?.output_tokens ??
+							null,
+						totalTokens:
+							itemMeta.totalTokens ??
+							itemMeta.total_tokens ??
+							itemMeta?.usage?.total_tokens ??
+							null,
+					};
+					console.info(
+						"[AI][Counselor] stream item metadata:",
+						itemMeta,
+						"usage:",
+						usage
+					);
+				}
+			} catch (logErr) {
+				console.warn(
+					"[AI][Counselor] Failed to log stream item metadata:",
+					logErr
+				);
+			}
+
 			const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
 			if (text) {
-				yield text;
+				yield { text, usage };
 			}
 		}
 	}
@@ -120,6 +214,11 @@ export class CounselorBrainClient {
 			type: d.type,
 		}));
 
+		const numbnessVal =
+			typeof input.affectiveLoad?.numbness === "number"
+				? input.affectiveLoad!.numbness
+				: null;
+
 		return [
 			"Based on the SYSTEM INSTRUCTIONS provided, generate a response for the following user context.",
 			"Respond ONLY with the JSON schema requested.",
@@ -131,7 +230,7 @@ export class CounselorBrainClient {
 			`Themes: ${JSON.stringify(input.themes)}`,
 			`Baseline Stats: ${JSON.stringify(input.baseline ?? {})}`,
 			`User Preferences: ${JSON.stringify(input.preferences ?? {})}`,
-
+			`Affective Numbness: ${numbnessVal ?? "unknown"}`,
 			"--- KNOWLEDGE BASE (RAG) ---",
 			docContext.length > 0
 				? JSON.stringify(docContext)
@@ -139,7 +238,11 @@ export class CounselorBrainClient {
 
 			"--- RECENT CONVERSATION ---",
 			JSON.stringify(recent),
-
+			"--- TTS BREATHING / PUNCTUATION GUIDELINES ---",
+			"Use commas (,) for short micro-pauses (~0.2s), periods (.) for full breaths (~0.5s), and ellipses (...) for pensive pauses (~0.8-1.2s).",
+			numbnessVal !== null && numbnessVal >= 0.6
+				? "NOTE: Affective numbness appears high; prefer ellipses '...' between reflective clauses to slow TTS pacing and convey gentle empathy."
+				: "If affective numbness is high, you may use ellipses '...' to slow delivery and add a pensive pause.",
 			"--- OUTPUT SCHEMA (JSON) ---",
 			JSON.stringify(
 				{
@@ -181,19 +284,30 @@ export class CounselorBrainClient {
 		- **Journey Summary**: ${input.summary}
 		- **Username**: ${nameContext}
 			
+		# MISSION
+    	1. **MIRROR PRONOUNS**: Check "Just Sent". If it used 'Gue/Lo', you MUST use 'Gue/Lo'. Maintain consistency.
+    	2. **DO NOT REPEAT**: Do not acknowledge the user's message again; the first layer already did that.
+    	3. **DEEPEN**: Connect the user's current state to the Knowledge Base (RAG) or patterns in the Journey Summary.
+    	4. **REFRAME**: Use the core thesis (grief, agency, continuity) to provide a new perspective.
+    	5. **MANDATORY CLOSING QUESTION**: You MUST end the response with exactly ONE short somatic question (location + pressure/speed/weight/emptiness).
+       	   - This question must be the VERY LAST thing you say.
+
 		# KNOWLEDGE BASE (RAG)
 		${memoryContext || "No specific memories found for this turn."}
 			
 		# RECENT CONVERSATION HISTORY
 		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
-			
-		# MISSION
-		1. **DO NOT REPEAT** what was just sent.
-		2. **EXPAND** using the Knowledge Base only if it actually fits.
-		3. **BRIDGE**: connect to the user's words without generic empathy.
-		4. **LENGTH**: 2-4 sentences.
-		5. **FOLLOW-UP** (optional): phenomenological only (location + pressure/speed/weight/emptiness). No engagement questions.
-			
+		
+		# TTS PACING
+    	- Use commas (,) for micro-pauses, periods (.) for breaths.
+    	- Use ellipses (...) before the closing question to create a reflective pause.
+    	${
+				typeof input.affectiveLoad?.numbness === "number" &&
+				input.affectiveLoad!.numbness >= 0.6
+					? "Affective numbness is high; use more ellipses '...' to slow down delivery."
+					: ""
+			}
+		
 		START CONTINUATION NOW:`.trim();
 	}
 }
