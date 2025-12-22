@@ -1,93 +1,45 @@
 import { axiosInstance } from "@/shared/lib/api/axios";
 import type {
-	QuickDassSummary,
-	ScreeningCompletionResponse,
-	ScreeningHistoryEntry,
-	ScreeningRecord,
-	ScreeningStartResponse,
-	ScreeningStepFourPayload,
-	ScreeningStepFourResponse,
-	ScreeningStepOnePayload,
-	ScreeningStepThreePayload,
-	ScreeningStepTwoPayload,
-	ScreeningStepUpdateResponse,
-	ScreeningStepFivePayload,
+	StateMappingGraphResponse,
+	StateMappingUpsertRequest,
 } from "shared";
 import type { ResponseWithData } from "shared";
 
-const BASE = "/screenings";
+const BASE = "/state-mapping";
 
-export async function startScreening() {
-	const response = await axiosInstance.post<
-		ResponseWithData<ScreeningStartResponse>
-	>(BASE);
-	return response.data.data;
-}
-
-export async function updateStepOne(
-	id: string,
-	payload: ScreeningStepOnePayload
-) {
-	const response = await axiosInstance.put<
-		ResponseWithData<ScreeningStepUpdateResponse>
-	>(`${BASE}/${id}/step/1`, payload);
-	return response.data.data;
-}
-
-export async function updateStepTwo(
-	id: string,
-	payload: ScreeningStepTwoPayload
-) {
-	const response = await axiosInstance.put<
-		ResponseWithData<ScreeningStepUpdateResponse>
-	>(`${BASE}/${id}/step/2`, payload);
-	return response.data.data;
-}
-
-export async function updateStepThree(
-	id: string,
-	payload: ScreeningStepThreePayload
-) {
-	const response = await axiosInstance.put<
-		ResponseWithData<ScreeningStepUpdateResponse>
-	>(`${BASE}/${id}/step/3`, payload);
-	return response.data.data;
-}
-
-export async function updateStepFour(
-	id: string,
-	payload: ScreeningStepFourPayload
-) {
-	const response = await axiosInstance.put<
-		ResponseWithData<ScreeningStepFourResponse>
-	>(`${BASE}/${id}/step/4`, payload);
-	return response.data.data;
-}
-
-export async function completeStepFive(
-	id: string,
-	payload: ScreeningStepFivePayload
-) {
-	const response = await axiosInstance.put<
-		ResponseWithData<ScreeningCompletionResponse>
-	>(`${BASE}/${id}/step/5`, payload);
-	return response.data.data;
-}
-
-export async function getScreening(id: string) {
-	const response = await axiosInstance.get<ResponseWithData<ScreeningRecord>>(
-		`${BASE}/${id}`
-	);
-	return response.data.data;
-}
-
-export async function getScreeningHistory(userId: string) {
+export async function getStateMappingGraph() {
 	const response = await axiosInstance.get<
-		ResponseWithData<ScreeningHistoryEntry[]>
-	>(BASE, {
-		params: { userId },
-	});
+		ResponseWithData<StateMappingGraphResponse>
+	>(`${BASE}/graph`);
 	return response.data.data;
 }
 
-export type ScreeningDassSummary = QuickDassSummary;
+export async function upsertStateMapping(payload: StateMappingUpsertRequest) {
+	const response = await axiosInstance.post<
+		ResponseWithData<StateMappingGraphResponse>
+	>(`${BASE}/upsert`, payload);
+	return response.data.data;
+}
+
+export type QuickDassInput = {
+	flatJoy: number;
+	motivation: number;
+	physicalAnxiety: number;
+	worry: number;
+	restDifficulty: number;
+	irritability: number;
+};
+
+export function computeQuickDassScores(input: QuickDassInput) {
+	const dRaw = input.flatJoy + input.motivation;
+	const aRaw = input.physicalAnxiety + input.worry;
+	const sRaw = input.restDifficulty + input.irritability;
+
+	const scale = (raw: number) => Math.round((raw / 6) * 14) * 2;
+
+	return {
+		depressionScore: scale(dRaw),
+		anxietyScore: scale(aRaw),
+		stressScore: scale(sRaw),
+	};
+}

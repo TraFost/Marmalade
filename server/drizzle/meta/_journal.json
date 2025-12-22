@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1764735991947,
-      "tag": "0000_mighty_doctor_faustus",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1765199835911,
-      "tag": "0002_rapid_dormammu",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1765426193538,
-      "tag": "0003_many_toad_men",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1765426258052,
-      "tag": "0004_smooth_ender_wiggin",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1765799610662,
-      "tag": "0005_fresh_sheva_callister",
+      "when": 1766329441531,
+      "tag": "0000_stormy_frank_castle",
       "breakpoints": true
     }
   ]

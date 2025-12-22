@@ -30,7 +30,7 @@ const QUESTION_CONFIG = [
 	},
 ] as const satisfies ReadonlyArray<{
 	prompt: string;
-	key: keyof OnboardingStepProps["formData"]["dassScores"];
+	key: Parameters<OnboardingStepProps["onUpdateDassScore"]>[0];
 }>;
 
 const DASS_OPTIONS = [

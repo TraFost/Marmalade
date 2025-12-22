@@ -20,25 +20,31 @@ import {
 
 import { users } from "./users.schema";
 
-const screeningStatusEnum = pgEnum("screening_status", SCREENING_STATUSES);
-const screeningGenderEnum = pgEnum("screening_gender", SCREENING_GENDERS);
-const screeningAgeRangeEnum = pgEnum(
+export const screeningStatusEnum = pgEnum(
+	"screening_status",
+	SCREENING_STATUSES
+);
+export const screeningGenderEnum = pgEnum(
+	"screening_gender",
+	SCREENING_GENDERS
+);
+export const screeningAgeRangeEnum = pgEnum(
 	"screening_age_range",
 	SCREENING_AGE_RANGES
 );
-const screeningSleepQualityEnum = pgEnum(
+export const screeningSleepQualityEnum = pgEnum(
 	"screening_sleep_quality",
 	SCREENING_SLEEP_QUALITIES
 );
-const screeningMedicationStatusEnum = pgEnum(
+export const screeningMedicationStatusEnum = pgEnum(
 	"screening_medication_status",
 	SCREENING_MEDICATION_STATUSES
 );
-const screeningSeverityEnum = pgEnum(
+export const screeningSeverityEnum = pgEnum(
 	"screening_severity",
 	SCREENING_SEVERITY_LEVELS
 );
-const screeningRiskLevelEnum = pgEnum(
+export const screeningRiskLevelEnum = pgEnum(
 	"screening_risk_level",
 	SCREENING_RISK_LEVELS
 );

@@ -1,14 +1,14 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
 import type { OnboardingStepProps } from "../onboarding.types";
-import type { ScreeningAgeRange, ScreeningGender } from "shared";
+import type { AgeRange, Gender } from "../onboarding.types";
 
-const GENDER_OPTIONS: { label: string; value: ScreeningGender }[] = [
+const GENDER_OPTIONS: { label: string; value: Gender }[] = [
 	{ label: "Male", value: "male" },
 	{ label: "Female", value: "female" },
 	{ label: "Other", value: "other" },
 ];
 
-const AGE_OPTIONS: { label: string; value: ScreeningAgeRange }[] = [
+const AGE_OPTIONS: { label: string; value: AgeRange }[] = [
 	{ label: "16-20", value: "16-20" },
 	{ label: "20-30", value: "20-30" },
 	{ label: "30-40", value: "30-40" },

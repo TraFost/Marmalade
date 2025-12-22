@@ -1,11 +1,11 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
 import type { OnboardingStepProps } from "../onboarding.types";
-import type { ScreeningMedicationStatus, ScreeningSleepQuality } from "shared";
+import type { MedicationStatus, SleepQuality } from "../onboarding.types";
 
 const SLEEP_OPTIONS: {
 	label: string;
 	description: string;
-	value: ScreeningSleepQuality;
+	value: SleepQuality;
 }[] = [
 	{ label: "Ideal", description: "7-9 hours", value: "ideal" },
 	{ label: "Good", description: "6-7 hours", value: "good" },
@@ -25,7 +25,7 @@ const SLEEP_OPTIONS: {
 
 const MEDICATION_OPTIONS: {
 	label: string;
-	value: ScreeningMedicationStatus;
+	value: MedicationStatus;
 }[] = [
 	{ label: "Yes, regularly", value: "regular" },
 	{ label: "Yes, sometimes", value: "sometimes" },
