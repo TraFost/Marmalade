@@ -25,8 +25,6 @@ export class EmbeddingClient {
 			},
 		});
 
-		console.log(res, "res");
-
 		const predictions = res.data?.predictions;
 
 		if (!predictions || !predictions[0]?.embeddings?.values) {
