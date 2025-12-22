@@ -153,6 +153,51 @@ export class MiniBrainClient {
 			],
 		});
 
+		const extractTokenUsage = (obj: any) => {
+			try {
+				const resp = obj?.response ?? obj ?? {};
+				const candidateMeta = (resp?.candidates?.[0] as any)?.metadata ?? {};
+				const metadata = resp?.metadata ?? {};
+				return {
+					inputTokens:
+						candidateMeta.inputTokens ??
+						candidateMeta.input_tokens ??
+						metadata.input_tokens ??
+						metadata.inputTokens ??
+						resp?.usage?.input_tokens ??
+						null,
+					outputTokens:
+						candidateMeta.outputTokens ??
+						candidateMeta.output_tokens ??
+						metadata.output_tokens ??
+						metadata.outputTokens ??
+						resp?.usage?.output_tokens ??
+						null,
+					totalTokens:
+						candidateMeta.totalTokens ??
+						candidateMeta.total_tokens ??
+						metadata.total_tokens ??
+						metadata.totalTokens ??
+						resp?.usage?.total_tokens ??
+						null,
+				};
+			} catch (err) {
+				return null;
+			}
+		};
+
+		try {
+			const tokenMeta = res?.response ?? null;
+			console.info("[AI][Mini] Vertex response (trimmed):", {
+				candidates: (tokenMeta?.candidates ?? []).length,
+				metadata: (tokenMeta as any)?.metadata ?? null,
+			});
+			const usage = extractTokenUsage(res);
+			if (usage) console.info("[AI][Mini] token usage:", usage);
+		} catch (logErr) {
+			console.warn("[AI][Mini] Failed to log Vertex response:", logErr);
+		}
+
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 		let parsed: unknown;
 		try {
@@ -161,7 +206,10 @@ export class MiniBrainClient {
 			throw new Error(`MiniBrain response was not valid JSON: ${raw}`);
 		}
 
-		return miniResponseSchema.parse(parsed);
+		const parsedRes = miniResponseSchema.parse(parsed) as any;
+		const usage = extractTokenUsage(res);
+		if (usage) parsedRes.__tokenUsage = usage;
+		return parsedRes;
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
@@ -174,7 +222,7 @@ export class MiniBrainClient {
 	        "summaryDelta": "1-sentence update",
 	        "overallSummary": "optional updated global summary",
 	        "mood": "calm|sad|anxious|angry|numb|mixed",
-	        "riskLevel": 0-5,
+	        "riskLevel": 0-4,
 	        "themes": ["theme1"],
 	        "suggestedAction": "normal|grounding_needed|escalate",
 	        "depth": "shallow|standard|profound",
@@ -206,7 +254,7 @@ export class MiniBrainClient {
 	      - profound: ONLY if the user expresses identity collapse (e.g., "I don't know who I am"), meaning collapse (life feels meaningless), persistent hopelessness, or repeated existential distress across multiple turns.
 	      - profound MUST NOT be used for: stress, pain, sadness, confusion, loneliness, or a first-time mention of distress without identity/meaning language.
 	      - urgency high: Use for high distress or panic, even if risk is low.
-	      - riskLevel 4-5: Use for suicidal ideation with plan or intent.
+	      - riskLevel 4: Use for suicidal ideation with plan or intent.
 		  - riskLevel 3: Use for suicidal ideation without plan or intent.
 	      - riskLevel 2: Use for passive suicidal thoughts or self-harm talk.
 	      - riskLevel 1: Use for fleeting dark thoughts, no ideation.
@@ -221,7 +269,8 @@ export class MiniBrainClient {
 		  # GUARDRAILS
 		  - If user just provides a name or says "hello", depth MUST be "shallow".
 		  - If depth is "shallow", urgency MUST be "low".
-		  - If user speaks english, respond in english. If Indonesian, respond in Indonesian. Otherwise, respond in English.
+		  - If user speaks English, respond in English. If Indonesian, respond in Indonesian. If mixed (Jaksel), respond in MIXED.
+          - detectedPronouns MUST be passed to ensure Counselor consistency.
 
 	      # INPUT
 	      Message: ${JSON.stringify(input.userMessage)}
