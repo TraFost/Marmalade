@@ -620,6 +620,10 @@ export class ConversationService {
 
 		console.time("Total-Voice-Latency");
 		const userName = (stateRes as any)?.preferences?.name || "Friend";
+		const prefs = asObject((stateRes as any)?.preferences) ?? {};
+		const baseGraph = ensureGraph(prefs.userStateGraph);
+		const baseSignals = (asObject(prefs.stateMappingSignals) ??
+			null) as StateMappingSignals | null;
 
 		const firstResponseStream =
 			this.firstResponseBrain.generateFirstResponseStream({
@@ -639,157 +643,250 @@ export class ConversationService {
 			totalTokens: 0,
 		};
 		let firstResponseUsageSeen = false;
-		try {
-			for await (const item of firstResponseStream as AsyncIterable<any>) {
-				const chunk = item?.text ?? item;
-				const usage = item?.usage;
-				if (typeof chunk === "string" && chunk.length) {
-					firstResponseFullText += chunk;
-					yield { text: chunk, voiceMode: "comfort" };
-				}
-				if (usage) {
-					firstResponseUsageSeen = true;
-					firstResponseUsage.inputTokens += (usage.inputTokens ?? 0) as number;
-					firstResponseUsage.outputTokens += (usage.outputTokens ??
-						0) as number;
-					firstResponseUsage.totalTokens += (usage.totalTokens ?? 0) as number;
-				}
-			}
-			console.info("[Turn] FirstResponse finished. Masking done.", {
-				textPreview: firstResponseFullText.slice(0, 400),
-				length: firstResponseFullText.length,
-				tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
-			});
-		} catch (err) {
-			console.error("First-response stream failed:", err);
-			firstResponseFullText = EMERGENCY_PACKET.replyText;
-			yield { text: firstResponseFullText, voiceMode: "comfort" };
-			console.info("[Turn] FirstResponse fell back to emergency packet");
-		}
-
-		let mini: any;
-		let relevantDocs: any;
-		try {
-			[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
-			console.info("[Turn] MiniBrain & RAG Ready.");
-			const miniUsage = (mini as any)?.__tokenUsage ?? null;
-			if (miniUsage) console.info("[Turn] MiniBrain token usage:", miniUsage);
-		} catch (e) {
-			console.warn("[Turn] Analysis failed, using fallback.");
-			mini = {
-				mood: "mixed",
-				riskLevel: 0,
-				stateRead: fallbackStateRead(userMessage),
-			};
-			relevantDocs = [];
-		}
-
-		const prefs = asObject((stateRes as any)?.preferences) ?? {};
-		const coordinated = coordinateTurn({
-			userMessage,
-			graph: ensureGraph(prefs.userStateGraph),
-			stateRead: mini.stateRead ?? fallbackStateRead(userMessage),
-			signals: (asObject(prefs.stateMappingSignals) ??
-				null) as StateMappingSignals | null,
-		});
-
 		const recentMessages =
 			dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
-		const history = (recentMessages as any[])
-			.map((m) => ({ role: m.role, content: m.content }))
-			.reverse()
-			.concat([{ role: "assistant", content: firstResponseFullText }]);
+
+		const quickCoordinated = coordinateTurn({
+			userMessage,
+			graph: baseGraph,
+			stateRead: fallbackStateRead(userMessage),
+			signals: baseSignals,
+		});
+		const quickRiskLevel = (stateRes as any)?.riskLevel ?? 0;
+		const quickMood = (stateRes as any)?.mood ?? "mixed";
+		const quickThemes = (stateRes as any)?.lastThemes ?? [];
+		const quickSystemInstruction = buildSystemInstruction({
+			mood: quickMood,
+			riskLevel: quickRiskLevel,
+			mode: detectCompanionRequest(userMessage) ? "companion" : "support",
+			stateDelta: quickCoordinated.delta,
+			languagePlan: quickCoordinated.languagePlan,
+			decision: quickCoordinated.decision,
+		});
 
 		let proResponseFullText = "";
 		let proStart = Date.now();
 		let proFirstChunkAt: number | null = null;
 		let counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 		let counselorUsageSeen = false;
-		try {
-			const systemInstruction = buildSystemInstruction({
-				mood: mini.mood,
-				riskLevel: mini.riskLevel,
-				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
-				stateDelta: coordinated.delta,
-				languagePlan: coordinated.languagePlan,
-				decision: coordinated.decision,
-			});
+		let counselorStarted = false;
+		let counselorIterator: {
+			next: () => Promise<IteratorResult<any, any>>;
+		} | null = null;
+		let counselorNext: Promise<IteratorResult<any, any>> | null = null;
+
+		const thresholdWords = 8;
+		let emittedWordCount = 0;
+		const countWords = (s: string) =>
+			s.trim().split(/\s+/).filter(Boolean).length;
+
+		const startCounselor = () => {
+			if (counselorStarted) return;
+			counselorStarted = true;
+
+			const history = (recentMessages as any[])
+				.map((m) => ({ role: m.role, content: m.content }))
+				.reverse()
+				.concat([{ role: "assistant", content: firstResponseFullText }]);
 
 			const stream = this.counselorBrain.generateReplyTextStream({
 				conversationWindow: history,
-				summary: mini.overallSummary || (stateRes as any)?.summary,
-				relevantDocs,
-				systemInstruction,
-				mood: mini.mood,
-				affectiveLoad: mini.stateRead?.affectiveLoad,
-				riskLevel: mini.riskLevel,
-				themes: mini.themes || [],
-				safetyMode: this.getSafetyMode(mini.riskLevel),
-				preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
+				summary: (stateRes as any)?.summary ?? null,
+				relevantDocs: [],
+				systemInstruction: quickSystemInstruction,
+				mood: quickMood,
+				affectiveLoad: null,
+				riskLevel: quickRiskLevel,
+				themes: Array.isArray(quickThemes) ? quickThemes : [],
+				safetyMode: this.getSafetyMode(quickRiskLevel),
+				preferences: { ...prefs, userStateGraph: quickCoordinated.nextGraph },
 			});
 
+			const iterator = (stream as any)[Symbol.asyncIterator]();
+			counselorIterator = iterator;
 			proStart = Date.now();
 			proFirstChunkAt = null;
 			counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 			counselorUsageSeen = false;
-			for await (const item of stream as AsyncIterable<any>) {
-				const chunkText = item?.text ?? item;
-				const usage = item?.usage;
-				if (typeof chunkText === "string" && chunkText.length) {
-					if (!proFirstChunkAt) proFirstChunkAt = Date.now();
-					proResponseFullText += chunkText;
-					yield { text: chunkText, voiceMode: "comfort" };
+			counselorNext = iterator.next();
+		};
+
+		const firstIterator = (firstResponseStream as AsyncIterable<any>)[
+			Symbol.asyncIterator
+		]();
+		let firstNext: Promise<IteratorResult<any, any>> | null =
+			firstIterator.next();
+
+		const finalizeAndSaveAsync = (finalContent: string) => {
+			(async () => {
+				let mini: any;
+				let relevantDocs: any;
+				try {
+					[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
+					console.info("[Turn] MiniBrain & RAG Ready.");
+					const miniUsage = (mini as any)?.__tokenUsage ?? null;
+					if (miniUsage)
+						console.info("[Turn] MiniBrain token usage:", miniUsage);
+				} catch (_e) {
+					console.warn("[Turn] Analysis failed, using fallback.");
+					mini = {
+						mood: "mixed",
+						riskLevel: 0,
+						stateRead: fallbackStateRead(userMessage),
+					};
+					relevantDocs = [];
 				}
-				if (usage) {
-					counselorUsageSeen = true;
-					counselorUsage.inputTokens += (usage.inputTokens ?? 0) as number;
-					counselorUsage.outputTokens += (usage.outputTokens ?? 0) as number;
-					counselorUsage.totalTokens += (usage.totalTokens ?? 0) as number;
+
+				const coordinated = coordinateTurn({
+					userMessage,
+					graph: baseGraph,
+					stateRead: mini.stateRead ?? fallbackStateRead(userMessage),
+					signals: baseSignals,
+				});
+
+				const proFirstChunkLatencyMs =
+					typeof proFirstChunkAt === "number"
+						? proFirstChunkAt - proStart
+						: null;
+				const proTotalMs = Date.now() - proStart;
+				const miniUsage = (mini as any)?.__tokenUsage ?? null;
+				console.info("[Turn] Counselor finished summary", {
+					firstPreview: firstResponseFullText.slice(0, 300),
+					continuationPreview: proResponseFullText.slice(0, 400),
+					finalLength: finalContent.length,
+					timings: {
+						proFirstChunkLatencyMs,
+						proTotalMs,
+					},
+					tokenUsage: {
+						mini: miniUsage,
+						firstResponse: firstResponseUsageSeen ? firstResponseUsage : null,
+						counselor: counselorUsageSeen ? counselorUsage : null,
+					},
+				});
+
+				await this.saveTurnAsync(
+					userId,
+					sessionId,
+					finalContent,
+					mini,
+					"comfort",
+					{
+						...stateRes,
+						preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
+					},
+					relevantDocs
+				);
+			})().catch((err) => console.error("Save failed", err));
+		};
+
+		try {
+			while (firstNext || counselorNext) {
+				const races: Array<Promise<{ src: "first" | "counselor"; r: any }>> =
+					[];
+				if (firstNext)
+					races.push(firstNext.then((r) => ({ src: "first" as const, r })));
+				if (counselorNext)
+					races.push(
+						counselorNext.then((r) => ({ src: "counselor" as const, r }))
+					);
+
+				const winner = await Promise.race(races);
+
+				if (winner.src === "first") {
+					firstNext = null;
+					if (winner.r?.done) {
+						if (!counselorStarted) startCounselor();
+						firstNext = null;
+					} else {
+						const item = winner.r.value;
+						const chunk = item?.text ?? item;
+						const usage = item?.usage;
+						if (typeof chunk === "string" && chunk.length) {
+							firstResponseFullText += chunk;
+							emittedWordCount += countWords(chunk);
+							yield { text: chunk, voiceMode: "comfort" };
+						}
+						if (usage) {
+							firstResponseUsageSeen = true;
+							firstResponseUsage.inputTokens += (usage.inputTokens ??
+								0) as number;
+							firstResponseUsage.outputTokens += (usage.outputTokens ??
+								0) as number;
+							firstResponseUsage.totalTokens += (usage.totalTokens ??
+								0) as number;
+						}
+
+						if (!counselorStarted && emittedWordCount >= thresholdWords) {
+							startCounselor();
+						}
+
+						if (firstIterator && !counselorNext) {
+							firstNext = firstIterator.next();
+						} else if (!counselorStarted) {
+							firstNext = firstIterator.next();
+						} else {
+							firstNext = firstIterator.next();
+						}
+					}
+				}
+
+				if (winner.src === "counselor") {
+					counselorNext = null;
+					if (winner.r?.done) {
+						break;
+					}
+
+					try {
+						await firstIterator.return?.();
+					} catch {
+						// ignore
+					}
+					firstNext = null;
+
+					const item = winner.r.value;
+					const chunkText = item?.text ?? item;
+					const usage = item?.usage;
+					if (typeof chunkText === "string" && chunkText.length) {
+						if (!proFirstChunkAt) proFirstChunkAt = Date.now();
+						proResponseFullText += chunkText;
+						yield { text: chunkText, voiceMode: "comfort" };
+					}
+					if (usage) {
+						counselorUsageSeen = true;
+						counselorUsage.inputTokens += (usage.inputTokens ?? 0) as number;
+						counselorUsage.outputTokens += (usage.outputTokens ?? 0) as number;
+						counselorUsage.totalTokens += (usage.totalTokens ?? 0) as number;
+					}
+
+					{
+						const iterator = counselorIterator as any;
+						counselorNext =
+							typeof iterator?.next === "function" ? iterator.next() : null;
+					}
 				}
 			}
-		} catch (e) {
-			console.error("Pro stream failed:", e);
-		} finally {
-			const finalContent = (
-				firstResponseFullText +
-				" " +
-				proResponseFullText
-			).trim();
-
-			const proFirstChunkLatencyMs =
-				typeof proFirstChunkAt === "number" ? proFirstChunkAt - proStart : null;
-			const proTotalMs = Date.now() - proStart;
-			const miniUsage = (mini as any)?.__tokenUsage ?? null;
-			console.info("[Turn] Counselor finished summary", {
-				firstPreview: firstResponseFullText.slice(0, 300),
-				continuationPreview: proResponseFullText.slice(0, 400),
-				finalLength: finalContent.length,
-				timings: {
-					proFirstChunkLatencyMs,
-					proTotalMs,
-				},
-				tokenUsage: {
-					mini: miniUsage,
-					firstResponse: firstResponseUsageSeen ? firstResponseUsage : null,
-					counselor: counselorUsageSeen ? counselorUsage : null,
-				},
-			});
-
-			this.saveTurnAsync(
-				userId,
-				sessionId,
-				finalContent,
-				mini,
-				"comfort",
-				{
-					...stateRes,
-					preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
-				},
-				relevantDocs
-			).catch((err) => console.error("Save failed", err));
-
-			console.timeEnd("Total-Voice-Latency");
+		} catch (err) {
+			console.error("Turn streaming failed:", err);
+			if (!firstResponseFullText) {
+				firstResponseFullText = EMERGENCY_PACKET.replyText;
+				yield { text: firstResponseFullText, voiceMode: "comfort" };
+			}
 		}
+
+		console.info("[Turn] FirstResponse partial/finished.", {
+			textPreview: firstResponseFullText.slice(0, 400),
+			length: firstResponseFullText.length,
+			tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
+		});
+
+		const finalContent = (
+			firstResponseFullText +
+			" " +
+			proResponseFullText
+		).trim();
+		finalizeAndSaveAsync(finalContent);
+		console.timeEnd("Total-Voice-Latency");
 	}
 
 	async summarizeSession(
