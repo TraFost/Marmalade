@@ -133,7 +133,7 @@ const INITIAL_FORM_DATA: OnboardingFormData = {
 const TOTAL_STEPS = STEP_DEFINITIONS.length;
 
 import { useNavigate } from "react-router";
-import { useStartSession } from "@/features/home/hooks/use-mutation.session";
+import { useStartSession } from "@/features/session/hooks/use-mutation.session";
 
 export function OnboardingPage() {
 	useAuth();

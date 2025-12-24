@@ -1,6 +1,6 @@
 import { WelcomePage } from "@/features/welcome/pages/welcome.page";
 import { OnboardingPage } from "@/features/welcome/pages/onboarding.page";
-import { SessionPage } from "@/features/home/pages/session.page";
+import { SessionPage } from "@/features/session/pages/session.page";
 
 import type { Page } from "./route";
 

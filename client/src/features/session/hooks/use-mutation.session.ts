@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { startSession } from "@/features/home/services/api.session";
+import { startSession } from "@/features/session/services/api.session";
 import { queryClient } from "@/shared/config/react-query.config";
 import { queryKeys } from "@/shared/lib/react-query/query-keys.lib";
 
