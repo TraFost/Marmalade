@@ -61,6 +61,47 @@ const detectCompanionRequest = (text: string): boolean => {
 	);
 };
 
+// Triviality gate: decide whether this turn should be handled by FirstResponse only
+const CRITICAL_KEYWORDS = [
+	"die",
+	"kill",
+	"hurt",
+	"suicide",
+	"end it",
+	"pain",
+	"lost",
+	"help",
+	"tired",
+	"alone",
+	"scared",
+	"sad",
+	"mati",
+	"bunuh",
+	"sakit",
+	"tolong",
+];
+
+const CONTEXT_KEYWORDS = [
+	"remember",
+	"yesterday",
+	"last time",
+	"who am i",
+	"advice",
+	"suggest",
+	"help me",
+];
+
+const isTrivialTurn = (text: string): boolean => {
+	const t = text.toLowerCase().trim();
+	if (CRITICAL_KEYWORDS.some((k) => t.includes(k))) return false;
+	if (CONTEXT_KEYWORDS.some((k) => t.includes(k))) return false;
+
+	const wordCount = t.split(/\s+/).filter(Boolean).length;
+	if (wordCount > 5 || t.length > 25) return false;
+
+	return true;
+};
+
 const nowIso = () => new Date().toISOString();
 
 const asObject = (v: unknown): Record<string, unknown> | null =>
@@ -617,15 +658,21 @@ export class ConversationService {
 			this.messages.listRecentBySession(sessionId, 5),
 		]);
 
-		const miniPromise = this.miniBrain.analyzeTurn({
-			userMessage,
-			recentMessages: [],
-			currentState: {},
-		});
-
-		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
-
 		const dataResults = await dataPromise;
+
+		const isStandalone = isTrivialTurn(userMessage);
+
+		let miniPromise: Promise<any> | null = null;
+		let ragPromise: Promise<any> | null = null;
+		if (!isStandalone) {
+			miniPromise = this.miniBrain.analyzeTurn({
+				userMessage,
+				recentMessages: [],
+				currentState: {},
+			});
+
+			ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
+		}
 		const sessionRes =
 			dataResults[0]?.status === "fulfilled" ? dataResults[0].value : null;
 		const stateRes =
@@ -649,6 +696,7 @@ export class ConversationService {
 				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
 				riskLevel: 0,
 				companionRequested: detectCompanionRequest(userMessage),
+				isStandalone: isStandalone,
 			});
 
 		let firstResponseFullText = "";
@@ -662,6 +710,59 @@ export class ConversationService {
 		let firstResponseUsageSeen = false;
 		const recentMessages =
 			dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
+
+		if (isStandalone) {
+			console.info("[Turn] Trivial turn detected — using FirstResponse only.");
+			for await (const item of firstResponseStream as AsyncIterable<any>) {
+				const chunk = item?.text ?? item;
+				const usage = item?.usage;
+				if (typeof chunk === "string" && chunk.length) {
+					firstResponseFullText += chunk;
+					yield { text: chunk, voiceMode: "comfort" };
+				}
+				if (usage) {
+					firstResponseUsageSeen = true;
+					firstResponseUsage.inputTokens += (usage.inputTokens ?? 0) as number;
+					firstResponseUsage.outputTokens += (usage.outputTokens ??
+						0) as number;
+					firstResponseUsage.totalTokens += (usage.totalTokens ?? 0) as number;
+				}
+			}
+
+			const finalContent = firstResponseFullText.trim();
+
+			const miniDummy = {
+				mood: "mixed",
+				riskLevel: 0,
+				stateRead: fallbackStateRead(userMessage),
+				themes: [],
+				summaryDelta: "",
+				depth: "standard",
+				suggestedAction: "normal",
+				urgency: "low",
+			};
+			try {
+				await this.saveTurnAsync(
+					userId,
+					sessionId,
+					finalContent,
+					miniDummy,
+					"comfort",
+					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
+					[]
+				);
+				console.info("[Turn] FirstResponse finished (trivial).", {
+					textPreview: firstResponseFullText.slice(0, 400),
+					length: firstResponseFullText.length,
+					tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
+				});
+			} catch (err) {
+				console.error("Failed to save trivial turn:", err);
+			}
+
+			console.timeEnd("Total-Voice-Latency");
+			return;
+		}
 
 		const quickCoordinated = coordinateTurn({
 			userMessage,
