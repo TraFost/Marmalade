@@ -1,7 +1,6 @@
 export type {
 	AgeRange,
 	Gender,
-	InteractionPreference,
 	MedicationStatus,
 	OnboardingDassKey,
 	OnboardingDassScores,
@@ -10,5 +9,4 @@ export type {
 	OnboardingStepDefinition,
 	OnboardingStepProps,
 	SleepQuality,
-	WillStatus,
 } from "@/shared/components/organisms/onboarding/onboarding.types";
