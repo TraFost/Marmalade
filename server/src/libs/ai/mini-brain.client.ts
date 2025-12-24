@@ -1,5 +1,6 @@
 import { VertexAI } from "@google-cloud/vertexai";
-import { z } from "zod";
+import { z, ZodError } from "zod";
+import { AppError } from "../helper/error.helper";
 
 import { env } from "../../configs/env.config";
 import type { StateDelta, UserStateRead } from "shared";
@@ -203,10 +204,35 @@ export class MiniBrainClient {
 		try {
 			parsed = JSON.parse(raw);
 		} catch (error) {
-			throw new Error(`MiniBrain response was not valid JSON: ${raw}`);
+			console.warn("[AI][Mini] Failed to parse JSON from MiniBrain:", {
+				error: (error as Error).message,
+				raw,
+			});
+			throw new AppError(
+				"MiniBrain response was not valid JSON",
+				400,
+				"INVALID_MINI_RESPONSE_JSON"
+			);
 		}
 
-		const parsedRes = miniResponseSchema.parse(parsed) as any;
+		let parsedRes: any;
+		try {
+			parsedRes = miniResponseSchema.parse(parsed) as any;
+		} catch (err) {
+			if (err instanceof ZodError) {
+				console.warn("[AI][Mini] MiniBrain response failed validation:", {
+					issues: err.issues,
+					raw,
+				});
+				throw new AppError(
+					"MiniBrain response failed validation",
+					400,
+					"INVALID_MINI_RESPONSE_SCHEMA"
+				);
+			}
+			throw err;
+		}
+
 		const usage = extractTokenUsage(res);
 		if (usage) parsedRes.__tokenUsage = usage;
 		return parsedRes;

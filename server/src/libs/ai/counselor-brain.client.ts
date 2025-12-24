@@ -296,15 +296,10 @@ export class CounselorBrainClient {
 		# RECENT CONVERSATION HISTORY
 		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
 		
-		# TTS PACING
-    	- Use commas (,) for micro-pauses, periods (.) for breaths.
-    	- Use ellipses (...) before the closing question to create a reflective pause.
-    	${
-				typeof input.affectiveLoad?.numbness === "number" &&
-				input.affectiveLoad!.numbness >= 0.6
-					? "Affective numbness is high; use more ellipses '...' to slow down delivery."
-					: ""
-			}
+    	# TTS PACING
+        - Write naturally. Do not force pauses.
+        - Use commas for rhythm, but avoid breaking sentences into fragments.
+        - Keep the tone gentle but fluid.
 		
 		START CONTINUATION NOW:`.trim();
 	}
