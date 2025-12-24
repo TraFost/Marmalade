@@ -75,6 +75,7 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 			let onData: ((data: any) => void) | undefined;
 			let onEnd: (() => void) | undefined;
 
+			let __heartbeat: any = null;
 			const stream = new ReadableStream({
 				start(controller) {
 					onData = (data: any) => {
@@ -85,20 +86,29 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 					onEnd = () => {
 						const s = `event: end\ndata: {}\n\n`;
 						controller.enqueue(new TextEncoder().encode(s));
-						controller.close();
-						maybeDeleteIfUnused(sessionId);
 					};
-
 					emitter.on("phase", onData!);
-					emitter.once("end", onEnd!);
+					emitter.on("end", onEnd!);
 
 					controller.enqueue(
 						new TextEncoder().encode("event: open\ndata: {}\n\n")
 					);
+
+					__heartbeat = setInterval(() => {
+						controller.enqueue(
+							new TextEncoder().encode("event: heartbeat\ndata: {}\n\n")
+						);
+					}, 15000);
 				},
 				cancel() {
 					emitter.off("phase", onData!);
 					emitter.off("end", onEnd!);
+
+					if (__heartbeat) {
+						clearInterval(__heartbeat);
+						__heartbeat = null;
+					}
+
 					maybeDeleteIfUnused(sessionId);
 				},
 			});
