@@ -9,3 +9,14 @@ export async function startSession() {
 	>(`${BASE_URL}/start`);
 	return response.data.data.sessionId;
 }
+
+export async function endSession(sessionId: string) {
+	const response = await axiosInstance.post<
+		ResponseWithData<{
+			sessionId: string;
+			summaryDocId: string;
+			summary: string;
+		}>
+	>(`${BASE_URL}/end`, { sessionId });
+	return response.data.data;
+}
