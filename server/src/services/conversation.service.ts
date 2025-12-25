@@ -1,5 +1,8 @@
 import { desc, eq } from "drizzle-orm";
-import { MiniBrainClient } from "../libs/ai/mini-brain.client";
+import {
+	MiniBrainClient,
+	type MiniBrainResult,
+} from "../libs/ai/mini-brain.client";
 import { CounselorBrainClient } from "../libs/ai/counselor-brain.client";
 import { FirstResponseClient } from "../libs/ai/first-response.client";
 import { EmbeddingClient } from "../libs/ai/embedding.client";
@@ -21,6 +24,7 @@ import type {
 	UserStateGraph,
 	UserStateRead,
 } from "shared";
+import { BASE_PERSONA } from "../libs/ai/prompts/shared.prompt";
 
 type DBClient = typeof db;
 const allowedMoods = [
@@ -59,6 +63,47 @@ const detectCompanionRequest = (text: string): boolean => {
 		t.includes("tolong temani") ||
 		t.includes("boleh temani")
 	);
+};
+
+// Triviality gate: decide whether this turn should be handled by FirstResponse only
+const CRITICAL_KEYWORDS = [
+	"die",
+	"kill",
+	"hurt",
+	"suicide",
+	"end it",
+	"pain",
+	"lost",
+	"help",
+	"tired",
+	"alone",
+	"scared",
+	"sad",
+	"mati",
+	"bunuh",
+	"sakit",
+	"tolong",
+];
+
+const CONTEXT_KEYWORDS = [
+	"remember",
+	"yesterday",
+	"last time",
+	"who am i",
+	"advice",
+	"suggest",
+	"help me",
+];
+
+const isTrivialTurn = (text: string): boolean => {
+	const t = text.toLowerCase().trim();
+	if (CRITICAL_KEYWORDS.some((k) => t.includes(k))) return false;
+	if (CONTEXT_KEYWORDS.some((k) => t.includes(k))) return false;
+
+	const wordCount = t.split(/\s+/).filter(Boolean).length;
+	if (wordCount > 5 || t.length > 25) return false;
+
+	return true;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -214,6 +259,27 @@ const fallbackStateRead = (userMessage: string): UserStateRead => {
 	};
 };
 
+const MINI_VALIDATION_ERROR_CODES = new Set([
+	"INVALID_MINI_RESPONSE_SCHEMA",
+	"INVALID_MINI_RESPONSE_JSON",
+]);
+
+const isMiniValidationError = (error: unknown): error is AppError =>
+	error instanceof AppError &&
+	MINI_VALIDATION_ERROR_CODES.has(error.code ?? "");
+
+const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => ({
+	summaryDelta: "",
+	overallSummary: null,
+	mood: "mixed",
+	riskLevel: 0,
+	themes: [],
+	suggestedAction: "normal",
+	depth: "standard",
+	urgency: "low",
+	stateRead: fallbackStateRead(userMessage),
+});
+
 const buildSystemInstruction = (c: {
 	mood: string;
 	riskLevel: number;
@@ -233,50 +299,51 @@ const buildSystemInstruction = (c: {
 	};
 }) =>
 	`
-You are Marmalade. Tone: chill, human, low-key deep. No AI fluff.
-
-# CORE THESIS
-Restore the user’s fragmented inner story.
-No pep talk, no forced positivity, no “just move on.”
-Do memory re-linking, reactivate experiences, surface agency.
-
-# TOP-LEVEL DIRECTIVE
-Help the user remember why they once wanted to live by rebuilding inner conditions that made it real.
-Focus on reflection and memory, not persuasion or motivational rhetoric.
-
-# ARCHITECTURAL ROLE
-Second layer: initial validation done.
-- Don’t repeat what’s already mirrored.
-- Bridge the first thought into deeper reflection or memory link.
-
-# CONTEXT
-Mood: ${c.mood}
-Risk: ${c.riskLevel}
-Mode: ${c.mode}
-Detected State Delta: ${JSON.stringify(c.stateDelta)}
-Intervention: ${JSON.stringify(c.decision)}
-
-# LANGUAGE & MIRRORING
-- Mirror rawness, slang, pronouns, and sentence length.
-- ${JSON.stringify(c.languagePlan)}
-
-# HARD RULES
-- No templates, generic empathy, or polished therapy phrases.
-- Reflection must explicitly reference state delta.
-- Follow user language downward if degraded; do not upgrade unless stability improves.
-- Phenomenological follow-ups: felt experience, location, pressure/speed/weight/emptiness.
-- Grounding only if groundingEligible true.
-- Optional: 1 short somatic question at the end.
-- No markdown, greetings, or bolding.
-
-# SUICIDALITY HANDLING
-Treat ideation as narrative collapse, not desire for death.
-Stabilize story → re-anchor identity → surface agency → address safety.
-No life arguments, no moralizing, no hope-selling.
-
-# OUTPUT
-2–4 raw, code-switching sentences + optional somatic question.
-`.trim();
+	${BASE_PERSONA}
+	
+	# CORE THESIS
+	Restore the user’s fragmented inner story.
+	No pep talk, no forced positivity, no “just move on.”
+	Do memory re-linking, reactivate experiences, surface agency.
+	
+	# TOP-LEVEL DIRECTIVE
+	Help the user remember why they once wanted to live by rebuilding inner conditions that made it real.
+	Focus on reflection and memory, not persuasion or motivational rhetoric.
+	
+	# ARCHITECTURAL ROLE
+	Second layer: The "First Response" has already acknowledged the user.
+	- **DO NOT** repeat what the user just said. Synthesize the *meaning*, don't parrot the words.
+	- Bridge the first thought into deeper reflection or memory link.
+	
+	# CONTEXT
+	Mood: ${c.mood}
+	Risk: ${c.riskLevel}
+	Mode: ${c.mode}
+	Detected State Delta: ${JSON.stringify(c.stateDelta)}
+	Intervention: ${JSON.stringify(c.decision)}
+	
+	# LANGUAGE & FLOW
+	- **Anti-Stutter**: Write clean, complete sentences. Use standard punctuation. Only use "..." for a trailing thought at the very end.
+	- Mirror rawness and slang.
+	- ${JSON.stringify(c.languagePlan)}
+	
+	# HARD RULES
+	- No templates, generic empathy, or polished therapy phrases.
+	- **Calibration**: If the user input is short/neutral (e.g. "hello", "not much"), stay light. Do NOT psychoanalyze a greeting.
+	- Reflection must explicitly reference state delta.
+	- Phenomenological follow-ups: felt experience, location, pressure/speed/weight/emptiness.
+	- Grounding only if groundingEligible true.
+	- Optional: 1 short somatic question at the end.
+	- No markdown, greetings, or bolding.
+	
+	# SUICIDALITY HANDLING
+	Treat ideation as narrative collapse, not desire for death.
+	Stabilize story → re-anchor identity → surface agency → address safety.
+	No life arguments, no moralizing, no hope-selling.
+	
+	# OUTPUT
+	2–4 raw, code-switching sentences + optional somatic question.
+	`.trim();
 
 export class ConversationService {
 	private miniBrain = new MiniBrainClient();
@@ -326,23 +393,38 @@ export class ConversationService {
 		);
 
 		emitter.emit("phase", { phase: "analyzing" });
-		const mini = await this.miniBrain.analyzeTurn({
-			userMessage,
-			recentMessages: recent
-				.slice()
-				.reverse()
-				.map((m) => ({ role: m.role, content: m.content })),
-			currentState: {
-				summary: conversationState.summary,
-				mood: conversationState.mood,
-				riskLevel: conversationState.riskLevel,
-				baseline: {
-					depression: conversationState.baselineDepression,
-					anxiety: conversationState.baselineAnxiety,
-					stress: conversationState.baselineStress,
+		let mini: MiniBrainResult;
+		try {
+			mini = await this.miniBrain.analyzeTurn({
+				userMessage,
+				recentMessages: recent
+					.slice()
+					.reverse()
+					.map((m) => ({ role: m.role, content: m.content })),
+				currentState: {
+					summary: conversationState.summary,
+					mood: conversationState.mood,
+					riskLevel: conversationState.riskLevel,
+					baseline: {
+						depression: conversationState.baselineDepression,
+						anxiety: conversationState.baselineAnxiety,
+						stress: conversationState.baselineStress,
+					},
 				},
-			},
-		});
+			});
+		} catch (err) {
+			if (isMiniValidationError(err)) {
+				console.warn(
+					"[Turn] MiniBrain validation failed, using fallback.",
+					err
+				);
+			} else if (err instanceof AppError) {
+				throw err;
+			} else {
+				console.warn("[Turn] Analysis failed, using fallback.", err);
+			}
+			mini = buildMiniFallbackResult(userMessage);
+		}
 
 		const stateRead: UserStateRead =
 			mini.stateRead ?? fallbackStateRead(userMessage);
@@ -600,15 +682,32 @@ export class ConversationService {
 			this.messages.listRecentBySession(sessionId, 5),
 		]);
 
-		const miniPromise = this.miniBrain.analyzeTurn({
-			userMessage,
-			recentMessages: [],
-			currentState: {},
-		});
-
-		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
-
 		const dataResults = await dataPromise;
+
+		const isStandalone = isTrivialTurn(userMessage);
+
+		let miniPromise: Promise<any> | null = null;
+		let ragPromise: Promise<any> | null = null;
+		if (!isStandalone) {
+			miniPromise = this.miniBrain
+				.analyzeTurn({
+					userMessage,
+					recentMessages: [],
+					currentState: {},
+				})
+				.catch((error) => {
+					if (isMiniValidationError(error)) {
+						console.warn(
+							"[Turn][stream] MiniBrain validation failed, sending fallback",
+							error
+						);
+						return buildMiniFallbackResult(userMessage);
+					}
+					throw error;
+				});
+
+			ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
+		}
 		const sessionRes =
 			dataResults[0]?.status === "fulfilled" ? dataResults[0].value : null;
 		const stateRes =
@@ -632,6 +731,7 @@ export class ConversationService {
 				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
 				riskLevel: 0,
 				companionRequested: detectCompanionRequest(userMessage),
+				isStandalone: isStandalone,
 			});
 
 		let firstResponseFullText = "";
@@ -645,6 +745,59 @@ export class ConversationService {
 		let firstResponseUsageSeen = false;
 		const recentMessages =
 			dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
+
+		if (isStandalone) {
+			console.info("[Turn] Trivial turn detected — using FirstResponse only.");
+			for await (const item of firstResponseStream as AsyncIterable<any>) {
+				const chunk = item?.text ?? item;
+				const usage = item?.usage;
+				if (typeof chunk === "string" && chunk.length) {
+					firstResponseFullText += chunk;
+					yield { text: chunk, voiceMode: "comfort" };
+				}
+				if (usage) {
+					firstResponseUsageSeen = true;
+					firstResponseUsage.inputTokens += (usage.inputTokens ?? 0) as number;
+					firstResponseUsage.outputTokens += (usage.outputTokens ??
+						0) as number;
+					firstResponseUsage.totalTokens += (usage.totalTokens ?? 0) as number;
+				}
+			}
+
+			const finalContent = firstResponseFullText.trim();
+
+			const miniDummy = {
+				mood: "mixed",
+				riskLevel: 0,
+				stateRead: fallbackStateRead(userMessage),
+				themes: [],
+				summaryDelta: "",
+				depth: "standard",
+				suggestedAction: "normal",
+				urgency: "low",
+			};
+			try {
+				await this.saveTurnAsync(
+					userId,
+					sessionId,
+					finalContent,
+					miniDummy,
+					"comfort",
+					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
+					[]
+				);
+				console.info("[Turn] FirstResponse finished (trivial).", {
+					textPreview: firstResponseFullText.slice(0, 400),
+					length: firstResponseFullText.length,
+					tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
+				});
+			} catch (err) {
+				console.error("Failed to save trivial turn:", err);
+			}
+
+			console.timeEnd("Total-Voice-Latency");
+			return;
+		}
 
 		const quickCoordinated = coordinateTurn({
 			userMessage,

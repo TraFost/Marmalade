@@ -13,6 +13,7 @@ export function SessionPage() {
 	const [mood] = useState<Mood>("calm");
 	const {
 		orbState,
+		phase,
 		micMuted,
 		setMicMuted,
 		lastText,
@@ -40,6 +41,16 @@ export function SessionPage() {
 								mood={mood}
 								crisisMode={false}
 							/>
+							{phase !== "idle" && (
+								<div className="mt-4 text-sm text-slate-300">
+									{phase === "analyzing" && "Marmalade is analyzing..."}
+									{phase === "recalling" &&
+										"Marmalade is recalling shared memories..."}
+									{phase === "formulating" &&
+										"Marmalade is formulating a reply..."}
+									{phase === "replying" && "Marmalade is replying..."}
+								</div>
+							)}
 						</div>
 
 						<SessionTranscripts text={lastText} showDots={showDots} />

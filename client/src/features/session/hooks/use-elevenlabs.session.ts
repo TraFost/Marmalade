@@ -17,10 +17,13 @@ type UseElevenlabsSessionOptions = {
 	autoStart?: boolean;
 };
 
+type Phase = "idle" | "analyzing" | "recalling" | "formulating" | "replying";
+
 type UseElevenlabsSessionReturn = {
 	status: ElevenLabsStatus;
 	mode: ElevenLabsMode;
 	orbState: OrbState;
+	phase: Phase;
 	micMuted: boolean;
 	setMicMuted: (muted: boolean) => void;
 	lastText: string;
@@ -65,13 +68,20 @@ export function useElevenlabsSession(
 
 	const [micMuted, setMicMuted] = useState(false);
 	const [mode, setMode] = useState<ElevenLabsMode>("unknown");
+	const [phase, setPhase] = useState<Phase>("idle");
 	const [lastText, setLastText] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [internalSessionId, setInternalSessionId] = useState<string | null>(
 		null
 	);
+	const internalSessionIdRef = useRef<string | null>(null);
+
+	useEffect(() => {
+		internalSessionIdRef.current = internalSessionId;
+	}, [internalSessionId]);
 	const startingRef = useRef<Promise<void> | null>(null);
 	const endingRef = useRef<Promise<void> | null>(null);
+	const esRef = useRef<EventSource | null>(null);
 
 	const conversation = useConversation({
 		micMuted,
@@ -141,7 +151,9 @@ export function useElevenlabsSession(
 					agentId,
 					connectionType: "webrtc",
 					...(userId ? { userId: String(userId) } : {}),
-					...(internalSessionId ? { sessionId: internalSessionId } : {}),
+					...(internalSessionIdRef.current
+						? { sessionId: internalSessionIdRef.current }
+						: {}),
 				});
 			} catch (e) {
 				setError(
@@ -161,6 +173,13 @@ export function useElevenlabsSession(
 		if (endingRef.current) return endingRef.current;
 		endingRef.current = (async () => {
 			try {
+				try {
+					if (esRef.current) {
+						esRef.current.close();
+						esRef.current = null;
+						setPhase("idle");
+					}
+				} catch {}
 				await (conversation as any).endSession();
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to end conversation");
@@ -205,18 +224,62 @@ export function useElevenlabsSession(
 		}
 	}, [conversation]);
 
-	// useEffect(() => {
-	// 	if (!autoStart) return;
-	// 	void start();
-	// 	return () => {
-	// 		void end();
-	// 	};
-	// }, [autoStart, end, start]);
+	useEffect(() => {
+		if (!autoStart) return;
+		void start();
+	}, [autoStart, start]);
+
+	useEffect(() => {
+		if (!internalSessionId) return;
+		const url = `${env.baseURL}/messages/events?sessionId=${internalSessionId}`;
+		try {
+			const es = new EventSource(url, { withCredentials: true });
+			es.onopen = () => {
+				setPhase("idle");
+			};
+
+			es.addEventListener("phase", (e: MessageEvent) => {
+				try {
+					const data = JSON.parse(e.data);
+					if (data && typeof data.phase === "string") {
+						setPhase(data.phase as any);
+					}
+				} catch {
+					// ignore malformed phase events
+				}
+			});
+
+			es.addEventListener("heartbeat", () => {});
+
+			es.addEventListener("end", () => {
+				setPhase("idle");
+			});
+
+			es.onerror = (err) => {
+				console.warn("SSE connection error for session events", err);
+			};
+
+			esRef.current = es;
+		} catch (err) {
+			console.warn("Failed to open SSE for session events", err);
+		}
+
+		return () => {
+			try {
+				esRef.current?.close();
+			} catch (e) {
+				// ignore
+			}
+			esRef.current = null;
+			setPhase("idle");
+		};
+	}, [internalSessionId]);
 
 	return {
 		status: safeStatus,
 		mode,
 		orbState,
+		phase,
 		micMuted,
 		setMicMuted,
 		lastText,
