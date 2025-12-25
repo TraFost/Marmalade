@@ -71,7 +71,9 @@ export function useElevenlabsSession(
 	const [phase, setPhase] = useState<Phase>("idle");
 	const [lastText, setLastText] = useState("");
 	const [error, setError] = useState<string | null>(null);
-	const [internalSessionId, setInternalSessionId] = useState<string | null>(null);
+	const [internalSessionId, setInternalSessionId] = useState<string | null>(
+		null
+	);
 	const internalSessionIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
@@ -149,7 +151,9 @@ export function useElevenlabsSession(
 					agentId,
 					connectionType: "webrtc",
 					...(userId ? { userId: String(userId) } : {}),
-					...(internalSessionIdRef.current ? { sessionId: internalSessionIdRef.current } : {}),
+					...(internalSessionIdRef.current
+						? { sessionId: internalSessionIdRef.current }
+						: {}),
 				});
 			} catch (e) {
 				setError(
