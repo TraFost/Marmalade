@@ -1,19 +1,34 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { SessionTranscripts } from "@/shared/components/organisms/session/transcript.session";
 import { AmbientBackground } from "@/shared/components/organisms/session/ambient-bg.session";
 import { CognitiveOrb } from "@/shared/components/organisms/session/cognitive-orb.session";
 import { SessionDock } from "@/shared/components/organisms/session/dock.session";
+import { ShiningText } from "@/shared/components/atoms/shining-text";
 
-import type { Mood } from "@/features/session/types/session.type";
+import type { Phase } from "@/features/session/types/session.type";
 import { useElevenlabsSession } from "@/features/session/hooks/use-elevenlabs.session";
 
+const phaseMessages = (phase: Phase): string | undefined => {
+	if (phase === "idle") return undefined;
+
+	const phases = {
+		analyzing: "analyzing...",
+		recalling: "recalling shared memories...",
+		formulating: "formulating a reply...",
+		replying: "replying...",
+	};
+
+	let message = "Marmalade is " + (phases[phase] ?? "");
+	return message;
+};
+
 export function SessionPage() {
-	const [mood] = useState<Mood>("calm");
 	const {
 		orbState,
 		phase,
+		mood,
 		micMuted,
 		setMicMuted,
 		lastText,
@@ -22,7 +37,12 @@ export function SessionPage() {
 		sendText,
 		sendTyping,
 	} = useElevenlabsSession({ autoStart: true });
-	const showDots = status === "connecting" || orbState === "processing";
+
+	const showDots = useMemo(() => {
+		return (
+			status === "connecting" || orbState === "processing" || phase !== "idle"
+		);
+	}, [phase, status, orbState]);
 
 	return (
 		<section className="relative w-full min-h-dvh text-slate-50 selection:bg-primary/40 flex flex-col">
@@ -43,12 +63,7 @@ export function SessionPage() {
 							/>
 							{phase !== "idle" && (
 								<div className="mt-4 text-sm text-slate-300">
-									{phase === "analyzing" && "Marmalade is analyzing..."}
-									{phase === "recalling" &&
-										"Marmalade is recalling shared memories..."}
-									{phase === "formulating" &&
-										"Marmalade is formulating a reply..."}
-									{phase === "replying" && "Marmalade is replying..."}
+									<ShiningText text={phaseMessages(phase)!} />
 								</div>
 							)}
 						</div>

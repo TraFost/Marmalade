@@ -8,7 +8,17 @@ import {
 	startSession,
 } from "@/features/session/services/api.session";
 
-import type { OrbState } from "@/features/session/types/session.type";
+import type {
+	Mood,
+	OrbState,
+	Phase,
+} from "@/features/session/types/session.type";
+
+const mapBackendMood = (backendMood?: string | null): Mood => {
+	if (backendMood === "calm") return "calm";
+	if (backendMood === "anxious" || backendMood === "angry") return "anxious";
+	return "warm";
+};
 
 type ElevenLabsStatus = "connected" | "connecting" | "disconnected";
 type ElevenLabsMode = "speaking" | "listening" | "unknown";
@@ -17,13 +27,12 @@ type UseElevenlabsSessionOptions = {
 	autoStart?: boolean;
 };
 
-type Phase = "idle" | "analyzing" | "recalling" | "formulating" | "replying";
-
 type UseElevenlabsSessionReturn = {
 	status: ElevenLabsStatus;
 	mode: ElevenLabsMode;
 	orbState: OrbState;
 	phase: Phase;
+	mood: Mood;
 	micMuted: boolean;
 	setMicMuted: (muted: boolean) => void;
 	lastText: string;
@@ -35,34 +44,29 @@ type UseElevenlabsSessionReturn = {
 	sendTyping: () => void;
 };
 
-function extractMessageText(message: unknown): string {
-	if (!message || typeof message !== "object") return "";
-	const anyMessage = message as any;
+function extractMessageText(message: any): { text: string; isDelta: boolean } {
+	if (!message || typeof message !== "object")
+		return { text: "", isDelta: false };
 
-	const directText =
-		(typeof anyMessage.text === "string" && anyMessage.text) ||
-		(typeof anyMessage.message === "string" && anyMessage.message) ||
-		(typeof anyMessage.content === "string" && anyMessage.content) ||
-		"";
-	if (directText) return directText;
+	const text = message.text || message.message || message.content || "";
+	const isDelta = message.type === "text_delta" || !!message.delta;
 
-	const maybeDelta = anyMessage?.delta;
-	if (maybeDelta && typeof maybeDelta === "object") {
-		const deltaText =
-			(typeof maybeDelta.text === "string" && maybeDelta.text) ||
-			(typeof maybeDelta.content === "string" && maybeDelta.content) ||
-			"";
-		if (deltaText) return deltaText;
+	if (text) return { text, isDelta };
+
+	if (message.delta?.text || message.delta?.content) {
+		return {
+			text: message.delta.text || message.delta.content,
+			isDelta: true,
+		};
 	}
 
-	return "";
+	return { text: "", isDelta: false };
 }
 
 export function useElevenlabsSession(
 	options: UseElevenlabsSessionOptions = {}
 ): UseElevenlabsSessionReturn {
 	const { autoStart = true } = options;
-
 	const { user } = useAuth();
 	const userId = (user as any)?.user?.id ?? (user as any)?.userId ?? undefined;
 
@@ -74,11 +78,9 @@ export function useElevenlabsSession(
 	const [internalSessionId, setInternalSessionId] = useState<string | null>(
 		null
 	);
-	const internalSessionIdRef = useRef<string | null>(null);
+	const [sessionMood, setSessionMood] = useState<Mood>("calm");
 
-	useEffect(() => {
-		internalSessionIdRef.current = internalSessionId;
-	}, [internalSessionId]);
+	const internalSessionIdRef = useRef<string | null>(null);
 	const startingRef = useRef<Promise<void> | null>(null);
 	const endingRef = useRef<Promise<void> | null>(null);
 	const esRef = useRef<EventSource | null>(null);
@@ -91,25 +93,31 @@ export function useElevenlabsSession(
 			);
 		},
 		onMessage: (m) => {
-			const text = extractMessageText(m);
-			if (text) setLastText(text);
+			const { text, isDelta } = extractMessageText(m);
+			if (!text) return;
+
+			if (isDelta) {
+				setLastText((prev) => prev + text);
+			} else {
+				setLastText(text);
+			}
 		},
 		onModeChange: (payload: any) => {
-			const nextMode =
-				typeof payload === "string"
-					? payload
-					: typeof payload?.mode === "string"
-					? payload.mode
-					: "";
+			const nextMode = typeof payload === "string" ? payload : payload?.mode;
 
 			if (nextMode === "speaking" || nextMode === "listening") {
-				setMode(nextMode);
+				setMode(nextMode as ElevenLabsMode);
+
+				if (nextMode === "listening") {
+					setLastText("");
+				}
 				return;
 			}
 			setMode("unknown");
 		},
 		onDisconnect: () => {
 			setMode("unknown");
+			setPhase("idle");
 		},
 	});
 
@@ -132,7 +140,7 @@ export function useElevenlabsSession(
 
 		const agentId = env.elevenLabsAgentId?.trim();
 		if (!agentId) {
-			setError("Missing ElevenLabs agent id (VITE_ELEVENLABS_AGENT_ID)");
+			setError("Missing ElevenLabs agent id");
 			return;
 		}
 
@@ -140,20 +148,14 @@ export function useElevenlabsSession(
 			try {
 				await navigator.mediaDevices.getUserMedia({ audio: true });
 
-				try {
-					const sid = await startSession();
-					setInternalSessionId(sid);
-				} catch (e) {
-					setError(e instanceof Error ? e.message : "Failed to start session");
-				}
+				const sid = await startSession();
+				setInternalSessionId(sid);
 
 				await (conversation as any).startSession({
 					agentId,
 					connectionType: "webrtc",
 					...(userId ? { userId: String(userId) } : {}),
-					...(internalSessionIdRef.current
-						? { sessionId: internalSessionIdRef.current }
-						: {}),
+					sessionId: sid,
 				});
 			} catch (e) {
 				setError(
@@ -173,24 +175,20 @@ export function useElevenlabsSession(
 		if (endingRef.current) return endingRef.current;
 		endingRef.current = (async () => {
 			try {
-				try {
-					if (esRef.current) {
-						esRef.current.close();
-						esRef.current = null;
-						setPhase("idle");
-					}
-				} catch {}
+				esRef.current?.close();
+				esRef.current = null;
+				setPhase("idle");
+
 				await (conversation as any).endSession();
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to end conversation");
 			}
 
-			const sid = internalSessionId;
-			if (sid) {
+			if (internalSessionId) {
 				try {
-					await endServerSession(sid);
+					await endServerSession(internalSessionId);
 				} catch {
-					// non-fatal
+					/* ignore */
 				}
 				setInternalSessionId(null);
 			}
@@ -205,73 +203,51 @@ export function useElevenlabsSession(
 
 	const sendText = useCallback(
 		(text: string) => {
-			const trimmed = text.trim();
-			if (!trimmed) return;
-			try {
-				(conversation as any).sendUserMessage(trimmed);
-			} catch {
-				// ignore
-			}
+			if (!text.trim()) return;
+			(conversation as any).sendUserMessage(text.trim());
 		},
 		[conversation]
 	);
 
 	const sendTyping = useCallback(() => {
-		try {
-			(conversation as any).sendUserActivity();
-		} catch {
-			// ignore
-		}
+		(conversation as any).sendUserActivity();
 	}, [conversation]);
 
 	useEffect(() => {
-		if (!autoStart) return;
-		void start();
+		if (autoStart) void start();
 	}, [autoStart, start]);
 
 	useEffect(() => {
+		internalSessionIdRef.current = internalSessionId;
+	}, [internalSessionId]);
+
+	useEffect(() => {
 		if (!internalSessionId) return;
+
 		const url = `${env.baseURL}/messages/events?sessionId=${internalSessionId}`;
+
 		try {
 			const es = new EventSource(url, { withCredentials: true });
-			es.onopen = () => {
-				setPhase("idle");
-			};
+			esRef.current = es;
 
 			es.addEventListener("phase", (e: MessageEvent) => {
 				try {
 					const data = JSON.parse(e.data);
-					if (data && typeof data.phase === "string") {
-						setPhase(data.phase as any);
-					}
-				} catch {
-					// ignore malformed phase events
-				}
+					if (data?.phase) setPhase(data.phase as Phase);
+					if (data?.mood) setSessionMood(mapBackendMood(data.mood));
+				} catch {}
 			});
 
-			es.addEventListener("heartbeat", () => {});
-
-			es.addEventListener("end", () => {
-				setPhase("idle");
-			});
-
-			es.onerror = (err) => {
-				console.warn("SSE connection error for session events", err);
+			es.onerror = () => {
+				console.warn("SSE link failed. Check BETTER_AUTH_SECRET.");
 			};
-
-			esRef.current = es;
 		} catch (err) {
-			console.warn("Failed to open SSE for session events", err);
+			console.error("SSE Setup Error", err);
 		}
 
 		return () => {
-			try {
-				esRef.current?.close();
-			} catch (e) {
-				// ignore
-			}
+			esRef.current?.close();
 			esRef.current = null;
-			setPhase("idle");
 		};
 	}, [internalSessionId]);
 
@@ -280,6 +256,7 @@ export function useElevenlabsSession(
 		mode,
 		orbState,
 		phase,
+		mood: sessionMood,
 		micMuted,
 		setMicMuted,
 		lastText,
