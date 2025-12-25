@@ -61,7 +61,7 @@ function extractMessageText(message: unknown): string {
 export function useElevenlabsSession(
 	options: UseElevenlabsSessionOptions = {}
 ): UseElevenlabsSessionReturn {
-	const { autoStart: _autoStart = true } = options;
+	const { autoStart = true } = options;
 
 	const { user } = useAuth();
 	const userId = (user as any)?.user?.id ?? (user as any)?.userId ?? undefined;
@@ -71,9 +71,12 @@ export function useElevenlabsSession(
 	const [phase, setPhase] = useState<Phase>("idle");
 	const [lastText, setLastText] = useState("");
 	const [error, setError] = useState<string | null>(null);
-	const [internalSessionId, setInternalSessionId] = useState<string | null>(
-		null
-	);
+	const [internalSessionId, setInternalSessionId] = useState<string | null>(null);
+	const internalSessionIdRef = useRef<string | null>(null);
+
+	useEffect(() => {
+		internalSessionIdRef.current = internalSessionId;
+	}, [internalSessionId]);
 	const startingRef = useRef<Promise<void> | null>(null);
 	const endingRef = useRef<Promise<void> | null>(null);
 	const esRef = useRef<EventSource | null>(null);
@@ -146,7 +149,7 @@ export function useElevenlabsSession(
 					agentId,
 					connectionType: "webrtc",
 					...(userId ? { userId: String(userId) } : {}),
-					...(internalSessionId ? { sessionId: internalSessionId } : {}),
+					...(internalSessionIdRef.current ? { sessionId: internalSessionIdRef.current } : {}),
 				});
 			} catch (e) {
 				setError(
@@ -217,22 +220,17 @@ export function useElevenlabsSession(
 		}
 	}, [conversation]);
 
-	// useEffect(() => {
-	// 	if (!autoStart) return;
-	// 	void start();
-	// 	return () => {
-	// 		void end();
-	// 	};
-	// }, [autoStart, end, start]);
+	useEffect(() => {
+		if (!autoStart) return;
+		void start();
+	}, [autoStart, start]);
 
-	// Manage SSE connection for thought phases (persistent during session)
 	useEffect(() => {
 		if (!internalSessionId) return;
 		const url = `${env.baseURL}/messages/events?sessionId=${internalSessionId}`;
 		try {
-			const es = new EventSource(url);
+			const es = new EventSource(url, { withCredentials: true });
 			es.onopen = () => {
-				// initial idle state; the server also sends an 'open' event immediately
 				setPhase("idle");
 			};
 
@@ -247,17 +245,13 @@ export function useElevenlabsSession(
 				}
 			});
 
-			es.addEventListener("heartbeat", () => {
-				// ignore — keeps the connection alive
-			});
+			es.addEventListener("heartbeat", () => {});
 
 			es.addEventListener("end", () => {
-				// server signals an 'end' for a phase but the stream remains open; reset to idle
 				setPhase("idle");
 			});
 
 			es.onerror = (err) => {
-				// Fail silently — do not surface to the user or break conversation
 				console.warn("SSE connection error for session events", err);
 			};
 
