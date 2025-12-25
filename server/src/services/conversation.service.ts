@@ -380,6 +380,8 @@ export class ConversationService {
 			preferences: null,
 		};
 
+		const previousMood = normalizeMood(conversationState.mood);
+
 		const prefs = asObject(conversationState.preferences) ?? {};
 		const graph = ensureGraph(prefs.userStateGraph);
 		const stateMappingSignals = (asObject(prefs.stateMappingSignals) ??
@@ -392,7 +394,7 @@ export class ConversationService {
 			5
 		);
 
-		emitter.emit("phase", { phase: "analyzing" });
+		emitter.emit("phase", { phase: "analyzing", mood: previousMood });
 		let mini: MiniBrainResult;
 		try {
 			mini = await this.miniBrain.analyzeTurn({
@@ -443,7 +445,7 @@ export class ConversationService {
 
 		const mood = normalizeMood(mini.mood);
 
-		emitter.emit("phase", { phase: "recalling" });
+		emitter.emit("phase", { phase: "recalling", mood });
 		const safetyMode = this.getSafetyMode(mini.riskLevel);
 		const relevant = await retrievePromise;
 
@@ -458,7 +460,7 @@ export class ConversationService {
 			decision: coordinated.decision,
 		});
 
-		emitter.emit("phase", { phase: "formulating" });
+		emitter.emit("phase", { phase: "formulating", mood });
 
 		const noMaterialDelta = coordinated.delta.notes === "no_material_delta";
 		const probe = mini.phenomenologyProbe?.trim();
@@ -576,7 +578,7 @@ export class ConversationService {
 			await this.sessions.incrementMessageCount(sessionId, 1, tx);
 		});
 
-		emitter.emit("phase", { phase: "reply" });
+		emitter.emit("phase", { phase: "replying", mood });
 		emitter.emit("end");
 
 		return {
