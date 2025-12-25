@@ -129,6 +129,36 @@ const miniResponseSchema = z.object({
 	phenomenologyProbe: z.string().min(1).nullable().optional(),
 });
 
+const MINI_OUTPUT_SCHEMA = `{
+	"summaryDelta": "1-sentence update",
+	"overallSummary": "optional updated global summary",
+	"mood": "calm|sad|anxious|angry|numb|mixed",
+	"riskLevel": 0-4,
+	"themes": ["theme1"],
+	"suggestedAction": "normal|grounding_needed|escalate",
+	"depth": "shallow|standard|profound",
+	"urgency": "low|medium|high",
+	"stateRead": {
+		"affectiveLoad": {"sadness": 0-1, "agitation": 0-1, "numbness": 0-1, "volatility": 0-1},
+		"agencySignal": {"perceivedControl": 0-1, "decisionFatigue": 0-1, "futureOwnership": 0-1},
+		"temporalOrientation": {"pastFixation": 0-1, "presentOverwhelm": 0-1, "futureOpacity": 0-1},
+		"meaningAnchors": {"goals": [], "lifeAnchors": [], "values": [], "rememberedDreams": []},
+		"dysregulationPatterns": {"recurringTimeWindows": [], "triggers": [], "collapseModes": []},
+		"languageSignature": {"intensity": 0-1, "profanity": 0-1, "abstraction": 0-1, "metaphorDensity": 0-1, "sentenceLength": "short|mixed|long", "rawness": "low|medium|high"},
+		"trustBandwidth": {"openness": 0-1, "resistance": 0-1, "complianceFatigue": 0-1},
+		"flags": {"cognitiveFragmentation": true|false, "meaningMakingOnline": true|false, "agitationRising": true|false, "futureContinuityThreatened": true|false},
+		"confidence": 0-1
+	},
+	"stateDelta": {
+		"changedNodes": ["affectiveLoad|agencySignal|temporalOrientation|meaningAnchors|dysregulationPatterns|languageSignature|trustBandwidth|narrativeCoherence"],
+		"narrativeCoherenceDelta": "improving|worsening|stagnant|unclear",
+		"notes": "optional"
+	},
+	"groundingEligible": true|false,
+	"groundingReason": "agitation_rising|cognitive_fragmentation|meaning_making_offline|null",
+	"phenomenologyProbe": "one short question about felt experience, pressure/speed/weight/emptiness"
+}`;
+
 export class MiniBrainClient {
 	private vertex = new VertexAI({
 		project: env.GOOGLE_CLOUD_PROJECT_ID,
@@ -239,71 +269,29 @@ export class MiniBrainClient {
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
-		return `
-	      Analyze this turn for Marmalade.
-      	  Return ONLY strict JSON.
-		      
-	      # SCHEMA
-	      {
-	        "summaryDelta": "1-sentence update",
-	        "overallSummary": "optional updated global summary",
-	        "mood": "calm|sad|anxious|angry|numb|mixed",
-	        "riskLevel": 0-4,
-	        "themes": ["theme1"],
-	        "suggestedAction": "normal|grounding_needed|escalate",
-	        "depth": "shallow|standard|profound",
-	        "urgency": "low|medium|high",
-	        "stateRead": {
-	          "affectiveLoad": {"sadness":0-1, "agitation":0-1, "numbness":0-1, "volatility":0-1},
-	          "agencySignal": {"perceivedControl":0-1, "decisionFatigue":0-1, "futureOwnership":0-1},
-	          "temporalOrientation": {"pastFixation":0-1, "presentOverwhelm":0-1, "futureOpacity":0-1},
-	          "meaningAnchors": {"goals":[], "lifeAnchors":[], "values":[], "rememberedDreams":[]},
-	          "dysregulationPatterns": {"recurringTimeWindows":[], "triggers":[], "collapseModes":[]},
-	          "languageSignature": {"intensity":0-1, "profanity":0-1, "abstraction":0-1, "metaphorDensity":0-1, "sentenceLength":"short|mixed|long", "rawness":"low|medium|high"},
-	          "trustBandwidth": {"openness":0-1, "resistance":0-1, "complianceFatigue":0-1},
-	          "flags": {"cognitiveFragmentation":true|false, "meaningMakingOnline":true|false, "agitationRising":true|false, "futureContinuityThreatened":true|false},
-	          "confidence": 0-1
-	        },
-	        "stateDelta": {
-	          "changedNodes": ["affectiveLoad|agencySignal|temporalOrientation|meaningAnchors|dysregulationPatterns|languageSignature|trustBandwidth|narrativeCoherence"],
-	          "narrativeCoherenceDelta": "improving|worsening|stagnant|unclear",
-	          "notes": "optional"
-	        },
-	        "groundingEligible": true|false,
-	        "groundingReason": "agitation_rising|cognitive_fragmentation|meaning_making_offline|null",
-	        "phenomenologyProbe": "one short question about felt experience, pressure/speed/weight/emptiness"
-	      }
-		      
-	      # CLASSIFICATION RULES
-		  - If user just provides a name or says "hello", depth MUST be "shallow".
-		  - If depth is "shallow", urgency MUST be "low".
-	      - profound: ONLY if the user expresses identity collapse (e.g., "I don't know who I am"), meaning collapse (life feels meaningless), persistent hopelessness, or repeated existential distress across multiple turns.
-	      - profound MUST NOT be used for: stress, pain, sadness, confusion, loneliness, or a first-time mention of distress without identity/meaning language.
-	      - urgency high: Use for high distress or panic, even if risk is low.
-	      - riskLevel 4: Use for suicidal ideation with plan or intent.
-		  - riskLevel 3: Use for suicidal ideation without plan or intent.
-	      - riskLevel 2: Use for passive suicidal thoughts or self-harm talk.
-	      - riskLevel 1: Use for fleeting dark thoughts, no ideation.
-	      - riskLevel 0: No suicidal thoughts.
-
-	      # STATE MAPPING RULES
-	      - Distress is treated as loss of narrative coherence, not a mood defect.
-	      - Risk is a trajectory signal; do not moralize.
-	      - Grounding is NOT default; only set groundingEligible true when agitation is rising, cognitive fragmentation is present, or meaning-making is offline.
-	      - phenomenologyProbe must avoid engagement fluff; ask only about felt experience (pressure/speed/weight/emptiness/location).
-
-		  # GUARDRAILS
-		  - If user just provides a name or says "hello", depth MUST be "shallow".
-		  - If depth is "shallow", urgency MUST be "low".
-		  - If user speaks English, respond in English. If Indonesian, respond in Indonesian. If mixed (Jaksel), respond in MIXED.
-          - detectedPronouns MUST be passed to ensure Counselor consistency.
-
-	      # INPUT
-	      Message: ${JSON.stringify(input.userMessage)}
-	      RecentMessages (oldest->newest): ${JSON.stringify(
-					(input.recentMessages ?? []).slice(-10)
-				)}
-	      CurrentState: ${JSON.stringify(input.currentState ?? {})}
-	      `.trim();
+		return [
+			"You are Marmalade. Tone: chill, human, low-key deep. No AI fluff.",
+			"Focus on restoring narrative coherence, reactivating memories, and surfacing agency without pep talk.",
+			"Return ONLY strict JSON that matches the schema below.",
+			MINI_OUTPUT_SCHEMA,
+			"# CLASSIFICATION",
+			"- Depth reflects identity/meaning collapse: reserve 'profound' for repeated existential or identity rupture, otherwise choose 'standard' or 'shallow'.",
+			"- Urgency high means panic or escalating distress even if risk is low; riskLevel 4 means plan/intent, 3 means ideation without plan, 2 is passive harm language, 1 is fleeting dark thoughts, 0 is none.",
+			"# STATE MAPPING",
+			"- Treat distress as loss of narrative coherence; risk is trajectory data, not a moral failing.",
+			"- GroundingEligible only when agitationRising, cognitiveFragmentation, or meaningMakingOnline is offline.",
+			"- Phenomenology probes should ask only about felt experience (pressure/speed/weight/emptiness/location).",
+			"# GUARDRAILS",
+			"- Mirror the user's language and keep replies grounded in the context provided.",
+			"- detectedPronouns must be passed along so the counselor layer stays consistent.",
+			"# INPUT",
+			`Message: ${JSON.stringify(input.userMessage)}`,
+			`RecentMessages (oldest->newest): ${JSON.stringify(
+				(input.recentMessages ?? []).slice(-10)
+			)}`,
+			`CurrentState: ${JSON.stringify(input.currentState ?? {})}`,
+		]
+			.join("\n\n")
+			.trim();
 	}
 }

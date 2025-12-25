@@ -1,5 +1,8 @@
 import { desc, eq } from "drizzle-orm";
-import { MiniBrainClient } from "../libs/ai/mini-brain.client";
+import {
+	MiniBrainClient,
+	type MiniBrainResult,
+} from "../libs/ai/mini-brain.client";
 import { CounselorBrainClient } from "../libs/ai/counselor-brain.client";
 import { FirstResponseClient } from "../libs/ai/first-response.client";
 import { EmbeddingClient } from "../libs/ai/embedding.client";
@@ -21,6 +24,7 @@ import type {
 	UserStateGraph,
 	UserStateRead,
 } from "shared";
+import { BASE_PERSONA } from "../libs/ai/prompts/shared.prompt";
 
 type DBClient = typeof db;
 const allowedMoods = [
@@ -255,6 +259,27 @@ const fallbackStateRead = (userMessage: string): UserStateRead => {
 	};
 };
 
+const MINI_VALIDATION_ERROR_CODES = new Set([
+	"INVALID_MINI_RESPONSE_SCHEMA",
+	"INVALID_MINI_RESPONSE_JSON",
+]);
+
+const isMiniValidationError = (error: unknown): error is AppError =>
+	error instanceof AppError &&
+	MINI_VALIDATION_ERROR_CODES.has(error.code ?? "");
+
+const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => ({
+	summaryDelta: "",
+	overallSummary: null,
+	mood: "mixed",
+	riskLevel: 0,
+	themes: [],
+	suggestedAction: "normal",
+	depth: "standard",
+	urgency: "low",
+	stateRead: fallbackStateRead(userMessage),
+});
+
 const buildSystemInstruction = (c: {
 	mood: string;
 	riskLevel: number;
@@ -274,7 +299,7 @@ const buildSystemInstruction = (c: {
 	};
 }) =>
 	`
-	You are Marmalade. Tone: chill, human, low-key deep. No AI fluff.
+	${BASE_PERSONA}
 	
 	# CORE THESIS
 	Restore the user’s fragmented inner story.
@@ -368,7 +393,7 @@ export class ConversationService {
 		);
 
 		emitter.emit("phase", { phase: "analyzing" });
-		let mini: any;
+		let mini: MiniBrainResult;
 		try {
 			mini = await this.miniBrain.analyzeTurn({
 				userMessage,
@@ -388,18 +413,17 @@ export class ConversationService {
 				},
 			});
 		} catch (err) {
-			if (err instanceof AppError) throw err;
-			console.warn("[Turn] Analysis failed, using fallback.", err);
-			mini = {
-				mood: "mixed",
-				riskLevel: 0,
-				stateRead: fallbackStateRead(userMessage),
-				themes: [],
-				summaryDelta: "",
-				depth: "standard",
-				suggestedAction: "normal",
-				urgency: "low",
-			};
+			if (isMiniValidationError(err)) {
+				console.warn(
+					"[Turn] MiniBrain validation failed, using fallback.",
+					err
+				);
+			} else if (err instanceof AppError) {
+				throw err;
+			} else {
+				console.warn("[Turn] Analysis failed, using fallback.", err);
+			}
+			mini = buildMiniFallbackResult(userMessage);
 		}
 
 		const stateRead: UserStateRead =
@@ -665,11 +689,22 @@ export class ConversationService {
 		let miniPromise: Promise<any> | null = null;
 		let ragPromise: Promise<any> | null = null;
 		if (!isStandalone) {
-			miniPromise = this.miniBrain.analyzeTurn({
-				userMessage,
-				recentMessages: [],
-				currentState: {},
-			});
+			miniPromise = this.miniBrain
+				.analyzeTurn({
+					userMessage,
+					recentMessages: [],
+					currentState: {},
+				})
+				.catch((error) => {
+					if (isMiniValidationError(error)) {
+						console.warn(
+							"[Turn][stream] MiniBrain validation failed, sending fallback",
+							error
+						);
+						return buildMiniFallbackResult(userMessage);
+					}
+					throw error;
+				});
 
 			ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
 		}

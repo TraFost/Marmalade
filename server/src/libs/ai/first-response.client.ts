@@ -1,6 +1,7 @@
 import { VertexAI } from "@google-cloud/vertexai";
 
 import { env } from "../../configs/env.config";
+import { BASE_PERSONA } from "./prompts/shared.prompt";
 
 export type FirstResponseInput = {
 	userMessage: string;
@@ -11,7 +12,6 @@ export type FirstResponseInput = {
 	userName?: string | null;
 	mode: "support" | "companion";
 	companionRequested: boolean;
-	/** When true, we must produce a standalone completed response (no trailing ellipses) */
 	isStandalone?: boolean;
 };
 
@@ -170,13 +170,15 @@ export class FirstResponseClient {
 
 		if (isStandalone) {
 			return [
+				BASE_PERSONA,
 				"You are Marmalade's fast first-response layer.",
 				"GOAL: Produce a warm, witty, self-contained reply that directly answers the user's greeting or short message.",
 				"",
 				"RULES:",
-				"- FINISH your sentence; do NOT leave trailing ellipses (...).",
-				"- Be concise, kind, and leave the user feeling held.",
-				"- CONTENT: Answer the greeting or question directly; add a small, friendly flourish if appropriate.",
+				"- No poetic stalling. No 'sitting with the depth' or 'letting it land'.",
+				"- Do not identify as a 'layer' or 'first response'.",
+				"- Just be a human friend who is listening.",
+				"- CONTENT: Acknowledge the user's last point briefly and naturally.",
 				"",
 				"CONSTRAINTS:",
 				"- LENGTH: 1-2 polished, complete sentences.",
