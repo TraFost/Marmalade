@@ -50,6 +50,7 @@ const elevenlabsWebhookSecret = serverCfg.requireSecret(
 	"elevenlabsWebhookSecret"
 );
 const elevenlabsDefaultUserId = serverCfg.getSecret("elevenlabsDefaultUserId");
+const betterAuthSecretKey = serverCfg.requireSecret("betterAuthSecretKey");
 
 const cloudSqlConnectionName = serverCfg.require("cloudSqlConnectionName");
 const authUrl = serverCfg.require("authUrl");
@@ -185,6 +186,7 @@ const service = new gcp.cloudrunv2.Service(
 						{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
 						{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
 						{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
+						{ name: "BETTER_AUTH_SECRET_KEY", value: betterAuthSecretKey },
 						{
 							name: "ELEVENLABS_WEBHOOK_SECRET",
 							value: elevenlabsWebhookSecret,
@@ -252,6 +254,7 @@ const migrateJob = new gcp.cloudrunv2.Job(
 							{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
 							{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
 							{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
+							{ name: "BETTER_AUTH_SECRET_KEY", value: betterAuthSecretKey },
 							{
 								name: "ELEVENLABS_WEBHOOK_SECRET",
 								value: elevenlabsWebhookSecret,
@@ -320,6 +323,7 @@ const kbSeedJob = new gcp.cloudrunv2.Job(
 							{ name: "DATABASE_HOST", value: databaseHostForCloudRun },
 							{ name: "GOOGLE_CLIENT_ID", value: googleClientId },
 							{ name: "GOOGLE_CLIENT_SECRET", value: googleClientSecret },
+							{ name: "BETTER_AUTH_SECRET_KEY", value: betterAuthSecretKey },
 							{
 								name: "ELEVENLABS_WEBHOOK_SECRET",
 								value: elevenlabsWebhookSecret,
