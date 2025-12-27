@@ -4,8 +4,16 @@ const abs = (n: number) => (n < 0 ? -n : n);
 
 export const detectDelta = (input: {
 	graph: UserStateGraph;
-	currentRead: UserStateRead;
+	currentRead?: UserStateRead | null;
 }): StateDelta => {
+	if (!input.currentRead) {
+		return {
+			changedNodes: ["narrativeCoherence"],
+			narrativeCoherenceDelta: "unclear",
+			notes: "no_current_read",
+		};
+	}
+
 	const baseline = input.graph.baseline?.read ?? input.graph.lastRead ?? null;
 
 	if (!baseline) {
