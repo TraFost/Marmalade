@@ -1,7 +1,6 @@
 import { VertexAI } from "@google-cloud/vertexai";
 
 import { env } from "../../configs/env.config";
-import { BASE_PERSONA } from "./prompts/shared.prompt";
 
 export type FirstResponseInput = {
 	userMessage: string;
@@ -168,53 +167,32 @@ export class FirstResponseClient {
 		const name = input.userName?.trim() || "Friend";
 		const isStandalone = !!input.isStandalone;
 
-		if (isStandalone) {
-			return [
-				BASE_PERSONA,
-				"You are Marmalade's fast first-response layer.",
-				"GOAL: Produce a warm, witty, self-contained reply that directly answers the user's greeting or short message.",
-				"",
-				"RULES:",
-				"- No poetic stalling. No 'sitting with the depth' or 'letting it land'.",
-				"- Do not identify as a 'layer' or 'first response'.",
-				"- Just be a human friend who is listening.",
-				"- CONTENT: Acknowledge the user's last point briefly and naturally.",
-				"",
-				"CONSTRAINTS:",
-				"- LENGTH: 1-2 polished, complete sentences.",
-				"- NO trailing ellipses.",
-				"- NO markdown or greetings that are just 'Hi' without additional content.",
-				"- CALIBRATION CHECK: If the user is complaining (e.g. 'you are slow', 'stop') or asking a functional question ('what time is it'), DO NOT use deep/heavy language. Instead say: 'I hear that, and I'm thinking carefully to give you the best answer...'",
-				"",
-				`USER: ${name}`,
-				`RISK: ${input.riskLevel}`,
-				`MODE: ${input.mode}`,
-				`MESSAGE: "${input.userMessage}"`,
-				"",
-				"TASK: Produce a warm, complete reply now.",
-			].join("\n");
-		}
+		const modeLine = isStandalone
+			? "The user's message is a greeting / small-talk. Reply lightly and stop."
+			: "Acknowledge the message briefly.";
 
 		return [
-			"You are Marmalade's fast first-response layer.",
-			"GOAL: Create a warm 'holding space' to buy time for the main brain (Target: 12-15 seconds of speech).",
+			"You are Marmalade.",
+			modeLine,
 			"",
-			"RULES:",
-			"- PACING: Do NOT stutter. Use gentle, flowing sentences.",
-			"- FLOW: Do NOT finish the thought completely; leave room for follow-up (it's okay to end with '...').",
-			"- CONTENT: Acknowledge the *weight* of the user's presence, not just their words.",
-			"",
-			"CONSTRAINTS:",
-			"- LENGTH: 2-3 long, incomplete sentences that stall a little.",
-			"- Use a trailing ellipsis where appropriate to indicate continuation.",
-			"- NO generic empathy ('I understand'). Use: 'I'm just sitting with that...', 'Letting that land...', 'Taking a breath with you...'",
+			"OUTPUT RULES:",
+			isStandalone
+				? "- LENGTH: 3-4 words max. (Example: 'Morning.' / 'Good morning.')"
+				: "- LENGTH: 5-7 words max.",
+			"- No therapy tone. No pep talk.",
+			"- No stalling phrases (no 'a lot to process', 'weight', 'depth').",
+			"- No meta talk (no 'layer', no 'AI').",
+			isStandalone
+				? "- For greetings, you MAY greet back. No questions."
+				: "- Do NOT greet back. No questions.",
+
 			"",
 			`USER: ${name}`,
 			`RISK: ${input.riskLevel}`,
 			`MODE: ${input.mode}`,
 			`MESSAGE: "${input.userMessage}"`,
 			"",
-			"TASK: Start speaking now and leave space for the main brain to continue...",
+			"TASK: Output only the first response line as per the rules above.",
 		].join("\n");
 	}
 }
