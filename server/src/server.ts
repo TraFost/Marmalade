@@ -6,6 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
 import { pinoLogger } from "hono-pino";
 import pino from "pino";
+import { logger } from "./libs/logger";
 
 import errorHandler from "./libs/middlewares/error.middleware";
 import { accessControlMiddleware } from "./libs/middlewares/access-control.middleware";
@@ -58,7 +59,10 @@ export function createApp() {
 		["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		"/api/auth/*",
 		(c) => {
-			console.log("Better Auth route hit:", c.req.method, c.req.path);
+			logger.info(
+				{ method: c.req.method, path: c.req.path },
+				"Better Auth route hit"
+			);
 			return auth.handler(c.req.raw);
 		}
 	);

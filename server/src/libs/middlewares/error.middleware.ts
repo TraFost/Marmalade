@@ -1,10 +1,12 @@
 import { type ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { logger } from "../logger";
 
 const errorHandler: ErrorHandler = (err, c) => {
-	console.error(`Error on ${c.req.method} ${c.req.url}`);
-	console.error(err?.message);
-	console.error(err?.stack);
+	logger.error(
+		{ method: c.req.method, url: c.req.url, err },
+		"Error on request"
+	);
 	if (err instanceof HTTPException) {
 		return err.getResponse();
 	}
