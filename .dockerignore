@@ -11,8 +11,6 @@
 .git
 .gitignore
 
-client
-
 infra
 
 .env*
