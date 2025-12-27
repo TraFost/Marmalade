@@ -12,6 +12,7 @@ import screeningsRoute from "./routes/screenings.route";
 import stateMappingRoute from "./routes/state-mapping.route";
 import sessionsRoute from "./routes/sessions.route";
 import messagesRoute from "./routes/messages.route";
+import reportsRoute from "./routes/reports.route";
 import hooksRoute from "./routes/hooks.route";
 
 import { corsConfig } from "./configs/cors.config";
@@ -22,7 +23,8 @@ export function createApp() {
 		.route("/screenings", screeningsRoute)
 		.route("/state-mapping", stateMappingRoute)
 		.route("/sessions", sessionsRoute)
-		.route("/messages", messagesRoute);
+		.route("/messages", messagesRoute)
+		.route("/reports", reportsRoute);
 
 	const app = new Hono()
 		.use(cors(corsConfig))
