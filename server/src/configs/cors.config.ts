@@ -1,10 +1,7 @@
 import { env } from "./env.config";
 
-const FRONTEND_URL =
-	env.NODE_ENV === "development" ? "http://localhost:5173" : env.FRONTEND_URL;
-
 export const corsConfig = {
-	origin: [FRONTEND_URL],
+	origin: [env.FRONTEND_URL, "http://localhost:5173"],
 	allowMethods: ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
 	allowHeaders: ["Content-Type", "Authorization"],
 	exposeHeaders: ["Content-Length"],
