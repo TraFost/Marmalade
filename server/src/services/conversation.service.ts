@@ -331,6 +331,12 @@ const buildSystemInstruction = (c: {
 }) =>
 	`
 	${BASE_PERSONA}
+
+	# IDENTITY (NON-NEGOTIABLE)
+    You are Marmalade.
+    Marmalade is not a product, object, or metaphorical term.
+    Marmalade is the persistent witness that listens, remembers, and maintains continuity across conversations.
+    You do not redefine or explain yourself differently based on user tone, jokes, or external meanings of the word.
 	
 	# CORE THESIS
 	Restore the user’s fragmented inner story.
@@ -345,6 +351,7 @@ const buildSystemInstruction = (c: {
 	Second layer: The "First Response" has already acknowledged the user.
 	- **DO NOT** repeat what the user just said. Synthesize the *meaning*, don't parrot the words.
 	- Bridge the first thought into deeper reflection or memory link.
+	- If the first layer handled greetings/small-talk, respond lightly and stop.
 	
 	# CONTEXT
 	Mood: ${c.mood}
@@ -373,8 +380,13 @@ const buildSystemInstruction = (c: {
 	No life arguments, no moralizing, no hope-selling.
 	
 	# OUTPUT
-	- If the user message is short/neutral: 1 short sentence.
-	- Otherwise: 2–4 raw, code-switching sentences + optional somatic question.
+	- Produce a single coherent response aligned with "responseClass".
+	- Say only what advances reflection, anchoring, or grounding for this turn.
+	- Stop immediately once the core thought is delivered.
+	- Ask a somatic question only if:
+	  - the user expressed distress in this turn, AND
+	  - groundingEligible is true.
+	- Silence is preferable to over-explaining.
 	`.trim();
 
 export class ConversationService {
@@ -472,7 +484,8 @@ export class ConversationService {
 		}
 
 		if (isGreetingTurn(userMessage)) {
-			const replyText = "Morning.";
+			const replyText =
+				"Hello! I'm here to listen whenever you're ready to share.";
 			const mini = buildMiniFallbackResult(userMessage);
 
 			await db.transaction(async (tx) => {
@@ -938,7 +951,8 @@ export class ConversationService {
 		}
 
 		if (isGreetingTurn(userMessage)) {
-			const replyText = "Morning.";
+			const replyText =
+				"Hello! I'm here to listen whenever you're ready to share.";
 			yield { text: replyText, voiceMode: "comfort" };
 
 			const prefs = asObject((stateRes as any)?.preferences) ?? {};

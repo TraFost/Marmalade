@@ -8,6 +8,7 @@ import { pinoLogger } from "hono-pino";
 import pino from "pino";
 
 import errorHandler from "./libs/middlewares/error.middleware";
+import { accessControlMiddleware } from "./libs/middlewares/access-control.middleware";
 import screeningsRoute from "./routes/screenings.route";
 import stateMappingRoute from "./routes/state-mapping.route";
 import sessionsRoute from "./routes/sessions.route";
@@ -44,6 +45,7 @@ export function createApp() {
 		.use(secureHeaders())
 		// .use(csrf())
 		.use(prettyJSON())
+		.use(accessControlMiddleware)
 		.onError(errorHandler)
 		.notFound((c) =>
 			c.json({ success: false, message: "Route not found" }, 404)
