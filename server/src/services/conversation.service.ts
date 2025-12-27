@@ -22,7 +22,6 @@ import type {
 	StateMappingSignals,
 	TurnResult,
 	UserStateGraph,
-	UserStateRead,
 } from "shared";
 import { BASE_PERSONA } from "../libs/ai/prompts/shared.prompt";
 
@@ -65,7 +64,6 @@ const detectCompanionRequest = (text: string): boolean => {
 	);
 };
 
-// Triviality gate: decide whether this turn should be handled by FirstResponse only
 const CRITICAL_KEYWORDS = [
 	"die",
 	"kill",
@@ -95,21 +93,100 @@ const CONTEXT_KEYWORDS = [
 	"help me",
 ];
 
+const isGreetingTurn = (text: string): boolean => {
+	const t = text.toLowerCase().trim();
+	return (
+		t === "hi" ||
+		t === "hey" ||
+		t === "hello" ||
+		t === "halo" ||
+		t === "hai" ||
+		t === "pagi" ||
+		t === "siang" ||
+		t === "malam" ||
+		t === "good morning" ||
+		t === "good night" ||
+		t === "good evening" ||
+		t.startsWith("good morning") ||
+		t.startsWith("selamat pagi") ||
+		t.startsWith("selamat siang") ||
+		t.startsWith("selamat malam")
+	);
+};
+
 const isTrivialTurn = (text: string): boolean => {
 	const t = text.toLowerCase().trim();
+	if (isEllipsisOnlyTurn(t)) return false;
 	if (CRITICAL_KEYWORDS.some((k) => t.includes(k))) return false;
 	if (CONTEXT_KEYWORDS.some((k) => t.includes(k))) return false;
 
 	const wordCount = t.split(/\s+/).filter(Boolean).length;
-	if (wordCount > 5 || t.length > 25) return false;
+	if (wordCount > 3 || t.length > 18) return false;
 
 	return true;
+};
+
+const isEllipsisOnlyTurn = (t: string): boolean => {
+	return /^\s*(?:\.{3,}|…+|(?:…\s*){1,})\s*$/.test(t);
 };
 
 const nowIso = () => new Date().toISOString();
 
 const asObject = (v: unknown): Record<string, unknown> | null =>
 	v && typeof v === "object" && !Array.isArray(v) ? (v as any) : null;
+
+const extractPreferredName = (text: string): string | null => {
+	const t = text.trim();
+	if (!t) return null;
+
+	const patterns: RegExp[] = [
+		/(?:\bmy name is\b|\bcall me\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
+		/(?:\bnama saya\b|\bnamaku\b|\bpanggil aku\b|\bpanggil saya\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
+	];
+
+	for (const re of patterns) {
+		const m = t.match(re);
+		const candidate = m?.[1]?.trim();
+		if (!candidate) continue;
+
+		const cleaned = candidate.replace(/["”“.!,?]+$/g, "").trim();
+		if (!cleaned) continue;
+
+		const bad = new Set([
+			"tired",
+			"sad",
+			"fine",
+			"okay",
+			"ok",
+			"good",
+			"broken",
+			"stressed",
+			"anxious",
+			"depressed",
+			"capek",
+			"sedih",
+			"baik",
+			"oke",
+			"pusing",
+			"takut",
+		]);
+		if (bad.has(cleaned.toLowerCase())) continue;
+
+		return cleaned.slice(0, 40);
+	}
+
+	return null;
+};
+
+const mergePreferencesWithImmediateFacts = (
+	prefs: Record<string, unknown>,
+	userMessage: string
+): Record<string, unknown> => {
+	const next = { ...prefs };
+	const name = extractPreferredName(userMessage);
+	if (name) next.name = name;
+	return next;
+};
 
 const PSYCHOLOGIST_YES_ANCHOR = "Has seen a psychologist before";
 const PSYCHOLOGIST_NO_ANCHOR = "Has not seen a psychologist before";
@@ -211,54 +288,6 @@ const ensureGraph = (maybe: unknown): UserStateGraph => {
 	return { version: 1, updatedAt: nowIso(), baseline: null, lastRead: null };
 };
 
-const fallbackStateRead = (userMessage: string): UserStateRead => {
-	return {
-		affectiveLoad: {
-			sadness: 0.2,
-			agitation: 0.2,
-			numbness: 0.1,
-			volatility: 0.1,
-		},
-		agencySignal: {
-			perceivedControl: 0.4,
-			decisionFatigue: 0.2,
-			futureOwnership: 0.3,
-		},
-		temporalOrientation: {
-			pastFixation: 0.2,
-			presentOverwhelm: 0.2,
-			futureOpacity: 0.2,
-		},
-		meaningAnchors: {
-			goals: [],
-			lifeAnchors: [],
-			values: [],
-			rememberedDreams: [],
-		},
-		dysregulationPatterns: {
-			recurringTimeWindows: [],
-			triggers: [],
-			collapseModes: [],
-		},
-		languageSignature: {
-			intensity: /!/.test(userMessage) ? 0.6 : 0.2,
-			profanity: 0,
-			abstraction: 0.4,
-			metaphorDensity: 0.2,
-			sentenceLength: "mixed",
-			rawness: "medium",
-		},
-		trustBandwidth: { openness: 0.3, resistance: 0.2, complianceFatigue: 0.2 },
-		flags: {
-			cognitiveFragmentation: false,
-			meaningMakingOnline: true,
-			agitationRising: false,
-			futureContinuityThreatened: false,
-		},
-		confidence: 0.2,
-	};
-};
-
 const MINI_VALIDATION_ERROR_CODES = new Set([
 	"INVALID_MINI_RESPONSE_SCHEMA",
 	"INVALID_MINI_RESPONSE_JSON",
@@ -268,17 +297,19 @@ const isMiniValidationError = (error: unknown): error is AppError =>
 	error instanceof AppError &&
 	MINI_VALIDATION_ERROR_CODES.has(error.code ?? "");
 
-const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => ({
-	summaryDelta: "",
-	overallSummary: null,
-	mood: "mixed",
-	riskLevel: 0,
-	themes: [],
-	suggestedAction: "normal",
-	depth: "standard",
-	urgency: "low",
-	stateRead: fallbackStateRead(userMessage),
-});
+const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => {
+	const isCrisis = /suicide|suicidal|mati|bunuh|kill|end it|sakit/i.test(
+		userMessage
+	);
+
+	return {
+		summaryDelta: "",
+		mood: "mixed",
+		riskLevel: isCrisis ? 4 : 0,
+		themes: isCrisis ? ["safety_threat"] : [],
+		suggestedAction: isCrisis ? "escalate" : "normal",
+	};
+};
 
 const buildSystemInstruction = (c: {
 	mood: string;
@@ -329,12 +360,12 @@ const buildSystemInstruction = (c: {
 	
 	# HARD RULES
 	- No templates, generic empathy, or polished therapy phrases.
-	- **Calibration**: If the user input is short/neutral (e.g. "hello", "not much"), stay light. Do NOT psychoanalyze a greeting.
-	- Reflection must explicitly reference state delta.
-	- Phenomenological follow-ups: felt experience, location, pressure/speed/weight/emptiness.
+	- **Calibration**: If the user input is short/neutral (e.g. "hello", "good morning", "not much"), stay light. Do NOT psychoanalyze a greeting.
+	- **State Delta**: Reference the detected state delta ONLY when it is meaningful/clear. If the delta is unclear / missing / "no_current_read", do not invent psychological shifts.
+	- Somatic/phenomenology questions ONLY if the user expressed distress/emotion in this turn.
 	- Grounding only if groundingEligible true.
-	- Optional: 1 short somatic question at the end.
-	- No markdown, greetings, or bolding.
+	- Do NOT add a somatic question on neutral/small-talk turns.
+	- No markdown or bolding. Do NOT greet (the first layer handled greetings).
 	
 	# SUICIDALITY HANDLING
 	Treat ideation as narrative collapse, not desire for death.
@@ -342,7 +373,8 @@ const buildSystemInstruction = (c: {
 	No life arguments, no moralizing, no hope-selling.
 	
 	# OUTPUT
-	2–4 raw, code-switching sentences + optional somatic question.
+	- If the user message is short/neutral: 1 short sentence.
+	- Otherwise: 2–4 raw, code-switching sentences + optional somatic question.
 	`.trim();
 
 export class ConversationService {
@@ -381,8 +413,187 @@ export class ConversationService {
 		};
 
 		const previousMood = normalizeMood(conversationState.mood);
+		const basePrefs = asObject(conversationState.preferences) ?? {};
+		const prefs = mergePreferencesWithImmediateFacts(basePrefs, userMessage);
+		if (isEllipsisOnlyTurn(userMessage.trim().toLowerCase())) {
+			const replyText = "I'm here.";
+			const mini = buildMiniFallbackResult(userMessage);
 
-		const prefs = asObject(conversationState.preferences) ?? {};
+			await db.transaction(async (tx) => {
+				await this.states.upsert(
+					{
+						userId,
+						summary: conversationState.summary,
+						mood: previousMood,
+						riskLevel: conversationState.riskLevel,
+						lastThemes: conversationState.lastThemes,
+						baselineDepression: conversationState.baselineDepression,
+						baselineAnxiety: conversationState.baselineAnxiety,
+						baselineStress: conversationState.baselineStress,
+						preferences: prefs,
+					},
+					tx
+				);
+
+				await this.riskLogs.create(
+					{
+						userId,
+						sessionId,
+						riskLevel: mini.riskLevel,
+						mood: previousMood,
+						themes: mini.themes,
+					},
+					tx
+				);
+
+				await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
+				await this.messages.create(
+					{
+						userId,
+						sessionId,
+						role: "assistant",
+						content: replyText,
+						metadata: { tags: ["ellipsis_short_circuit"] },
+						voiceMode: "comfort",
+						riskAtTurn: mini.riskLevel,
+						themes: mini.themes,
+					},
+					tx
+				);
+				await this.sessions.incrementMessageCount(sessionId, 1, tx);
+			});
+
+			return {
+				replyText,
+				voiceMode: "comfort",
+				mood: previousMood,
+				riskLevel: mini.riskLevel,
+			};
+		}
+
+		if (isGreetingTurn(userMessage)) {
+			const replyText = "Morning.";
+			const mini = buildMiniFallbackResult(userMessage);
+
+			await db.transaction(async (tx) => {
+				await this.states.upsert(
+					{
+						userId,
+						summary: conversationState.summary,
+						mood: previousMood,
+						riskLevel: conversationState.riskLevel,
+						lastThemes: conversationState.lastThemes,
+						baselineDepression: conversationState.baselineDepression,
+						baselineAnxiety: conversationState.baselineAnxiety,
+						baselineStress: conversationState.baselineStress,
+						preferences: prefs,
+					},
+					tx
+				);
+
+				await this.riskLogs.create(
+					{
+						userId,
+						sessionId,
+						riskLevel: mini.riskLevel,
+						mood: previousMood,
+						themes: mini.themes,
+					},
+					tx
+				);
+
+				await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
+				await this.messages.create(
+					{
+						userId,
+						sessionId,
+						role: "assistant",
+						content: replyText,
+						metadata: { tags: ["greeting_short_circuit"] },
+						voiceMode: "comfort",
+						riskAtTurn: mini.riskLevel,
+						themes: mini.themes,
+					},
+					tx
+				);
+				await this.sessions.incrementMessageCount(sessionId, 1, tx);
+			});
+
+			return {
+				replyText,
+				voiceMode: "comfort",
+				mood: previousMood,
+				riskLevel: mini.riskLevel,
+			};
+		}
+
+		if (isTrivialTurn(userMessage)) {
+			const userName =
+				typeof (prefs as any).name === "string" ? (prefs as any).name : null;
+			const replyText = (
+				await this.firstResponseBrain.generateFirstResponse({
+					userMessage,
+					userName,
+					mode: detectCompanionRequest(userMessage) ? "companion" : "support",
+					riskLevel: conversationState.riskLevel ?? 0,
+					companionRequested: detectCompanionRequest(userMessage),
+					isStandalone: true,
+				})
+			).trim();
+
+			const mini = buildMiniFallbackResult(userMessage);
+			await db.transaction(async (tx) => {
+				await this.states.upsert(
+					{
+						userId,
+						summary: conversationState.summary,
+						mood: previousMood,
+						riskLevel: conversationState.riskLevel,
+						lastThemes: conversationState.lastThemes,
+						baselineDepression: conversationState.baselineDepression,
+						baselineAnxiety: conversationState.baselineAnxiety,
+						baselineStress: conversationState.baselineStress,
+						preferences: prefs,
+					},
+					tx
+				);
+
+				await this.riskLogs.create(
+					{
+						userId,
+						sessionId,
+						riskLevel: mini.riskLevel,
+						mood: previousMood,
+						themes: mini.themes,
+					},
+					tx
+				);
+
+				await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
+				await this.messages.create(
+					{
+						userId,
+						sessionId,
+						role: "assistant",
+						content: replyText || "Got it.",
+						metadata: { tags: ["trivial_short_circuit"] },
+						voiceMode: "comfort",
+						riskAtTurn: mini.riskLevel,
+						themes: mini.themes,
+					},
+					tx
+				);
+				await this.sessions.incrementMessageCount(sessionId, 1, tx);
+			});
+
+			return {
+				replyText: replyText || "Got it.",
+				voiceMode: "comfort",
+				mood: previousMood,
+				riskLevel: mini.riskLevel,
+			};
+		}
+
 		const graph = ensureGraph(prefs.userStateGraph);
 		const stateMappingSignals = (asObject(prefs.stateMappingSignals) ??
 			null) as StateMappingSignals | null;
@@ -428,20 +639,15 @@ export class ConversationService {
 			mini = buildMiniFallbackResult(userMessage);
 		}
 
-		const stateRead: UserStateRead =
-			mini.stateRead ?? fallbackStateRead(userMessage);
 		const coordinated = coordinateTurn({
 			userMessage,
 			graph,
-			stateRead,
 			signals: stateMappingSignals,
 		});
 
-		const nextSummary = mini.overallSummary
-			? mini.overallSummary
-			: [conversationState.summary, mini.summaryDelta]
-					.filter(Boolean)
-					.join("\n");
+		const nextSummary = [conversationState.summary, mini.summaryDelta]
+			.filter(Boolean)
+			.join("\n");
 
 		const mood = normalizeMood(mini.mood);
 
@@ -462,11 +668,6 @@ export class ConversationService {
 
 		emitter.emit("phase", { phase: "formulating", mood });
 
-		const noMaterialDelta = coordinated.delta.notes === "no_material_delta";
-		const probe = mini.phenomenologyProbe?.trim();
-		const shouldProbe =
-			noMaterialDelta && (probe || stateRead.confidence >= 0.5);
-
 		const counselor = isHighRisk
 			? {
 					replyText:
@@ -477,15 +678,6 @@ export class ConversationService {
 						: null,
 					tags: ["future_continuity", "safety_then_coherence"],
 			  }
-			: shouldProbe
-			? {
-					replyText:
-						probe ??
-						"Where do you feel it most right now — and is it more like pressure, weight, speed, or emptiness?",
-					voiceMode: "comfort" as const,
-					suggestedExercise: null,
-					tags: ["phenomenology_probe", "delta_needed"],
-			  }
 			: await this.withTimeout(
 					this.counselorBrain.generateReply({
 						conversationWindow: recent
@@ -494,7 +686,6 @@ export class ConversationService {
 							.map((m) => ({ role: m.role, content: m.content })),
 						summary: nextSummary,
 						mood: mini.mood,
-						affectiveLoad: stateRead.affectiveLoad,
 						riskLevel: mini.riskLevel,
 						themes: mini.themes,
 						safetyMode,
@@ -511,7 +702,6 @@ export class ConversationService {
 								...prefs,
 								userStateGraph: coordinated.nextGraph,
 							}),
-							stateRead,
 							stateDelta: coordinated.delta,
 							responseClass: coordinated.decision.responseClass,
 							groundingEligible: coordinated.decision.groundingEligible,
@@ -598,9 +788,7 @@ export class ConversationService {
 			chunkSize?: number;
 		}
 	): AsyncGenerator<string, void, void> {
-		const bufferText =
-			options?.bufferText ??
-			(userMessage.length > 50 ? "That's a lot to process... " : "");
+		const bufferText = options?.bufferText ?? "";
 		const chunkSize = options?.chunkSize ?? 48;
 
 		if (bufferText) yield bufferText;
@@ -615,24 +803,31 @@ export class ConversationService {
 	private async saveTurnAsync(
 		userId: string,
 		sessionId: string,
+		userMessage: string,
 		replyText: string,
 		mini: any,
 		voiceMode: string,
 		state: any,
 		relevantDocs: any = []
-	) {
+	): Promise<void> {
 		await db.transaction(async (tx) => {
+			const nextSummary = [state?.summary, mini?.summaryDelta]
+				.filter(Boolean)
+				.join("\n");
+			const basePrefs = asObject(state?.preferences) ?? {};
+			const prefs = mergePreferencesWithImmediateFacts(basePrefs, userMessage);
+
 			await this.states.upsert(
 				{
 					userId,
-					summary: mini.overallSummary || state.summary,
+					summary: nextSummary || state.summary,
 					mood: normalizeMood(mini.mood),
 					riskLevel: mini.riskLevel,
 					lastThemes: mini.themes,
 					baselineDepression: state.baselineDepression,
 					baselineAnxiety: state.baselineAnxiety,
 					baselineStress: state.baselineStress,
-					preferences: state.preferences,
+					preferences: prefs,
 				},
 				tx
 			);
@@ -676,8 +871,6 @@ export class ConversationService {
 		sessionId: string,
 		userMessage: string
 	): AsyncGenerator<{ text: string; voiceMode?: string }, void, void> {
-		console.time("Latency-to-First-Byte");
-
 		const dataPromise = Promise.allSettled([
 			this.sessions.findById(sessionId),
 			this.states.getByUserId(userId),
@@ -686,7 +879,8 @@ export class ConversationService {
 
 		const dataResults = await dataPromise;
 
-		const isStandalone = isTrivialTurn(userMessage);
+		const isStandalone =
+			isTrivialTurn(userMessage) || isGreetingTurn(userMessage);
 
 		let miniPromise: Promise<any> | null = null;
 		let ragPromise: Promise<any> | null = null;
@@ -719,7 +913,54 @@ export class ConversationService {
 			throw new AppError("Session not found", 404);
 		}
 
-		console.time("Total-Voice-Latency");
+		if (isEllipsisOnlyTurn(userMessage.trim().toLowerCase())) {
+			const replyText = "I'm here.";
+			yield { text: replyText, voiceMode: "comfort" };
+
+			const prefs = asObject((stateRes as any)?.preferences) ?? {};
+			const baseGraph = ensureGraph(prefs.userStateGraph);
+			const miniDummy = buildMiniFallbackResult(userMessage);
+			try {
+				await this.saveTurnAsync(
+					userId,
+					sessionId,
+					userMessage,
+					replyText,
+					miniDummy,
+					"comfort",
+					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
+					[]
+				);
+			} catch (err) {
+				console.error("Failed to save ellipsis short-circuit turn:", err);
+			}
+			return;
+		}
+
+		if (isGreetingTurn(userMessage)) {
+			const replyText = "Morning.";
+			yield { text: replyText, voiceMode: "comfort" };
+
+			const prefs = asObject((stateRes as any)?.preferences) ?? {};
+			const baseGraph = ensureGraph(prefs.userStateGraph);
+			const miniDummy = buildMiniFallbackResult(userMessage);
+			try {
+				await this.saveTurnAsync(
+					userId,
+					sessionId,
+					userMessage,
+					replyText,
+					miniDummy,
+					"comfort",
+					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
+					[]
+				);
+			} catch (err) {
+				console.error("Failed to save greeting short-circuit turn:", err);
+			}
+			return;
+		}
+
 		const userName = (stateRes as any)?.preferences?.name || "Friend";
 		const prefs = asObject((stateRes as any)?.preferences) ?? {};
 		const baseGraph = ensureGraph(prefs.userStateGraph);
@@ -737,7 +978,6 @@ export class ConversationService {
 			});
 
 		let firstResponseFullText = "";
-		console.timeEnd("Latency-to-First-Byte");
 
 		let firstResponseUsage = {
 			inputTokens: 0,
@@ -749,7 +989,6 @@ export class ConversationService {
 			dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
 
 		if (isStandalone) {
-			console.info("[Turn] Trivial turn detected — using FirstResponse only.");
 			for await (const item of firstResponseStream as AsyncIterable<any>) {
 				const chunk = item?.text ?? item;
 				const usage = item?.usage;
@@ -769,42 +1008,33 @@ export class ConversationService {
 			const finalContent = firstResponseFullText.trim();
 
 			const miniDummy = {
+				summaryDelta: "",
 				mood: "mixed",
 				riskLevel: 0,
-				stateRead: fallbackStateRead(userMessage),
 				themes: [],
-				summaryDelta: "",
-				depth: "standard",
 				suggestedAction: "normal",
-				urgency: "low",
 			};
 			try {
 				await this.saveTurnAsync(
 					userId,
 					sessionId,
+					userMessage,
 					finalContent,
 					miniDummy,
 					"comfort",
 					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
 					[]
 				);
-				console.info("[Turn] FirstResponse finished (trivial).", {
-					textPreview: firstResponseFullText.slice(0, 400),
-					length: firstResponseFullText.length,
-					tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
-				});
 			} catch (err) {
 				console.error("Failed to save trivial turn:", err);
 			}
 
-			console.timeEnd("Total-Voice-Latency");
 			return;
 		}
 
 		const quickCoordinated = coordinateTurn({
 			userMessage,
 			graph: baseGraph,
-			stateRead: fallbackStateRead(userMessage),
 			signals: baseSignals,
 		});
 		const quickRiskLevel = (stateRes as any)?.riskLevel ?? 0;
@@ -850,7 +1080,6 @@ export class ConversationService {
 				relevantDocs: [],
 				systemInstruction: quickSystemInstruction,
 				mood: quickMood,
-				affectiveLoad: null,
 				riskLevel: quickRiskLevel,
 				themes: Array.isArray(quickThemes) ? quickThemes : [],
 				safetyMode: this.getSafetyMode(quickRiskLevel),
@@ -878,16 +1107,14 @@ export class ConversationService {
 				let relevantDocs: any;
 				try {
 					[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
-					console.info("[Turn] MiniBrain & RAG Ready.");
-					const miniUsage = (mini as any)?.__tokenUsage ?? null;
-					if (miniUsage)
-						console.info("[Turn] MiniBrain token usage:", miniUsage);
 				} catch (_e) {
 					console.warn("[Turn] Analysis failed, using fallback.");
 					mini = {
+						summaryDelta: "",
 						mood: "mixed",
 						riskLevel: 0,
-						stateRead: fallbackStateRead(userMessage),
+						themes: [],
+						suggestedAction: "normal",
 					};
 					relevantDocs = [];
 				}
@@ -895,34 +1122,13 @@ export class ConversationService {
 				const coordinated = coordinateTurn({
 					userMessage,
 					graph: baseGraph,
-					stateRead: mini.stateRead ?? fallbackStateRead(userMessage),
 					signals: baseSignals,
-				});
-
-				const proFirstChunkLatencyMs =
-					typeof proFirstChunkAt === "number"
-						? proFirstChunkAt - proStart
-						: null;
-				const proTotalMs = Date.now() - proStart;
-				const miniUsage = (mini as any)?.__tokenUsage ?? null;
-				console.info("[Turn] Counselor finished summary", {
-					firstPreview: firstResponseFullText.slice(0, 300),
-					continuationPreview: proResponseFullText.slice(0, 400),
-					finalLength: finalContent.length,
-					timings: {
-						proFirstChunkLatencyMs,
-						proTotalMs,
-					},
-					tokenUsage: {
-						mini: miniUsage,
-						firstResponse: firstResponseUsageSeen ? firstResponseUsage : null,
-						counselor: counselorUsageSeen ? counselorUsage : null,
-					},
 				});
 
 				await this.saveTurnAsync(
 					userId,
 					sessionId,
+					userMessage,
 					finalContent,
 					mini,
 					"comfort",
@@ -1029,19 +1235,12 @@ export class ConversationService {
 			}
 		}
 
-		console.info("[Turn] FirstResponse partial/finished.", {
-			textPreview: firstResponseFullText.slice(0, 400),
-			length: firstResponseFullText.length,
-			tokenUsage: firstResponseUsageSeen ? firstResponseUsage : null,
-		});
-
 		const finalContent = (
 			firstResponseFullText +
 			" " +
 			proResponseFullText
 		).trim();
 		finalizeAndSaveAsync(finalContent);
-		console.timeEnd("Total-Voice-Latency");
 	}
 
 	async summarizeSession(
