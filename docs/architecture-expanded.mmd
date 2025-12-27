@@ -12,7 +12,8 @@ flowchart LR
     ChatUI[Chat UI / Voice Input]
     Onboard -->|POST /api/state-mapping/upsert| API_Upsert
     Onboard -->|GET /api/state-mapping/graph| API_Graph
-    ChatUI -->|HTTP/WS message| API_Conversation
+    ChatUI -->|POST /v1/chat/completions| Hooks
+    ChatUI -->|HTTP/WS message (optional)| API_Conversation
     Onboard -. hydrate (pristine only) .-> Onboard
   end
 
@@ -21,7 +22,10 @@ flowchart LR
     direction LR
     API_Graph[GET /api/state-mapping/graph<br/>(state-mapping.route.ts)]
     API_Upsert[POST /api/state-mapping/upsert<br/>(state-mapping.route.ts)]
-    API_Conversation[POST /api/conversation (or websocket)]
+    Hooks[/POST /v1/chat/completions<br/>(hooks.route.ts)/]
+    API_Conversation[POST /api/conversation (optional)]
+    SSE[GET /api/messages/events<br/>(SSE stream)]
+    Reports[POST /api/reports/session<br/>(reports.route.ts)]
   end
 
   %% SERVICES & AGENTS
@@ -53,6 +57,8 @@ flowchart LR
   StateService -->|persist| ConvState
   StateService -->|return| API_Graph
 
+  Hooks -->|map externalSessionId → internal (externalSessionToInternal)| SessionService
+  Hooks -->|prepareTurn: ensure session, persist message| ConvService
   API_Conversation --> ConvService
   ConvService -->|retrieve relevant docs| EmbeddingRepo
   ConvService -->|analyze turn| MiniBrain
@@ -62,22 +68,34 @@ flowchart LR
   TurnCoord --> Arbiter
   TurnCoord --> MemoryCurator
   TurnCoord -->|decision & language plan| ConvService
+  ConvService -->|call| FirstResponse
   ConvService -->|call| Counselor
+  %% Counselor is wrapped with timeout (withTimeout → EMERGENCY_PACKET fallback)
+  Counselor -. withTimeout/EMERGENCY_PACKET .-> ConvService
+  FirstResponse --> ConvService
   Counselor -->|reply| ConvService
+  ConvService -->|emit events| EventBusNode
+  EventBusNode -->|stream chunks| SSE
+  EventBusNode -->|emit report-ready| Reports
   ConvService -->|persist updated graph/signals| StateService
   ConvService -->|persist message| Messages
 
   %% Notes
   classDef note fill:#f6f9ff,stroke:#c6d8ff;
   Note[(Note: State mapping stored in preferences JSON — no DB migrations required)]:::note
+  RiskNote[(Risk mapping: 0–4 → normal / caution / high_caution / crisis)<br/>See `getSafetyMode()` in `server/src/services/conversation.service.ts`.]:::note
+  RaceNote[(Streaming race: FirstResponse provides quick text; Counselor starts once emittedWordCount >= threshold)<br/>See `handleUserTurnModelStream()`]:::note
 
   %% File references (legend)
   subgraph REFS ["Key files / types"]
     direction LR
     T1[shared/src/types/state-graph.type.ts]
     R1[server/src/routes/state-mapping.route.ts]
+    HR1[server/src/routes/hooks.route.ts]
     S1[server/src/services/state-mapping.service.ts]
     C1[server/src/services/conversation.service.ts]
+    EB1[server/src/libs/events/event-bus.ts]
+    SR1[server/src/libs/ai/session-report.client.ts]
     A1[server/src/libs/ai/agents/*]
     U1[client/src/features/welcome/pages/onboarding.page.tsx]
   end
@@ -105,9 +123,10 @@ sequenceDiagram
   State-->>API: { graph, signals }
   API-->>Client: 200 OK (graph + signals)
 
-  Note over Client,Conv: User sends message / voice input
-  Client->>API: POST /api/conversation {message}
-  API->>Conv: handleMessage
+  Note over Client,Conv: User sends message / voice input (via hooks)
+  Client->>API: POST /v1/chat/completions {messages} (hooks.route.ts)
+  API->>SessionService: map externalSessionId → internalSessionId (externalSessionToInternal)
+  API->>Conv: prepareTurn (ensureSession, persist message) [hooks.route.ts -> MessageRepository]
   Conv->>DB: load conversation_state (preferences)
   DB-->>Conv: preferences { userStateGraph, stateMappingSignals }
   Conv->>Emb: findRelevant(userMessage)
@@ -117,10 +136,17 @@ sequenceDiagram
   Coord->>Lang: buildLanguageMirrorPlan(userText, {interactionPreference, willStatus})
   Coord->>Arb: decideIntervention({stateRead, delta, graph, signals})
   Coord-->>Conv: { languagePlan, decision, nextGraph }
-  Conv->>Coun: generateReply({systemInstruction, preferences, context})
-  Coun-->>Conv: { replyText, tags }
-  Conv->>DB: persist user message & updated preferences (nextGraph, updated signals)
+  Conv->>First: call FirstResponse (server/src/libs/ai/first-response.client.ts)
+  Conv->>Coun: generateReply({systemInstruction, preferences, context}) (server/src/libs/ai/counselor-brain.client.ts)
+  Coun -. withTimeout / EMERGENCY_PACKET .-> Conv
+  First-->>Conv: streaming quick text
+  Coun-->>Conv: streaming substantive text
+  Conv->>DB: persist assistant message & updated preferences (nextGraph, updated signals)
+  Conv->>EventBusNode: emit stream chunks / report-ready
+  EventBusNode-->>SSE: stream chunks (GET /api/messages/events)
+  EventBusNode-->>Reports: report-ready (optional)
   Conv-->>Client: streaming reply / final reply
+  Note over Conv,Summary: Optional: request SOAP report via report.service.ts, persist report (report.repository / memory_docs) and notify report-ready via EventBus
 ```
 
 

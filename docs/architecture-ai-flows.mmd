@@ -1,7 +1,7 @@
-%% Marmalade — AI Flows & ElevenLabs Hooks
+%% Marmalade — Implementation-accurate AI Flows & ElevenLabs Hooks
 %% File: docs/architecture-ai-flows.mmd
 
-# Hooks Integration (ElevenLabs agents)
+# Hooks Integration (ElevenLabs agents & external callers)
 
 ```mermaid
 flowchart LR
@@ -90,5 +90,99 @@ flowchart TB
 - Safety
   - Always enforce coarse gating server-side (`intervention-arbiter`) — do not delegate grounding eligibility to LLM prompt only.
   - Use `systemInstruction` templates that encode `interactionPreference`/`willStatus` so model output is aligned with deterministic plan.
+
+---
+
+## Implementation-accurate details (current code)
+
+### Streaming orchestration (key points)
+- `handleUserTurnModelStream` orchestrates two concurrent streams:
+  - `FirstResponse` stream (fast, short, friendly) which starts immediately and yields small chunks.
+  - `Counselor` stream (pro reply) starts when either the FirstResponse finishes or emittedWordCount >= `thresholdWords` (8), to balance responsiveness and quality.
+- Chunks from both generators are raced and emitted to the caller (SSE or OpenAI-style `chat.completion.chunk`).
+- The function uses `finalizeAndSaveAsync` to persist the final assistant reply asynchronously so streaming doesn't block DB writes.
+
+### MiniBrain & safety
+- `MiniBrain.analyzeTurn` (in `server/src/libs/ai/mini-brain.client.ts`) is the canonical per-turn classifier. Outputs are validated with Zod (`miniResponseSchema`).
+- Risk range is 0–4. The code treats `mini.riskLevel > 3` as a high-risk trigger and uses a crisis-safe canned reply instead of calling the counselor model.
+- `buildMiniFallbackResult` detects crisis language via a regex (e.g., `suicide|suicidal|kill|end it`) and returns `riskLevel: 4` immediately.
+- The `getSafetyMode` helper maps risk → `normal|caution|high_caution|crisis` (>=4→crisis, 3→high_caution, 2→caution, else normal).
+
+### Deterministic coordination
+- `coordinateTurn` (turn-coordinator) uses user graph & signals (e.g., `willStatus`, `interactionPreference`) to decide:
+  - `responseClass` (understanding/reflection/anchoring/grounding)
+  - `groundingEligible` and `groundingReason`
+  - `languagePlan` (sentence length, rawness, metaphor density)
+- These deterministic outputs are sent as part of `preferences` to the counselor LLM in `systemInstruction` to keep model output aligned.
+
+### Persistence & post-turn updates
+- Each resolved turn updates:
+  - `conversation_state` (summary, mood, riskLevel, lastThemes)
+  - `risk_logs` (per-turn risk and themes)
+  - `voice_sessions` (max risk via `sessions.updateMaxRisk`, message count)
+  - `messages` table (assistant message with `riskAtTurn`, `themes`, `metadata`)
+- Session end flow (`SessionService.endSession`) calls `summarizeSession`, which:
+  - Aggregates messages + risks, computes `riskSummary` (min/max/avg), extracts `topThemes`.
+  - Builds `summaryContent` JSON, generates an embedding via `EmbeddingClient`, and creates a `memory_docs` record (`type: session_summary`) via `MemoryDocRepository`.
+
+### Telemetry & fallback behavior
+- AI clients log trimmed candidate metadata and token usage when available to help with cost/monitoring.
+- `withTimeout` wraps long model calls so the system can fall back to `EMERGENCY_PACKET` (a conservative assistant message) if a call stalls.
+- Zod validation errors are surfaced as `AppError` with codes such as `INVALID_MINI_RESPONSE_SCHEMA` and handled safely by the pipeline.
+
+### Hooks route precise behavior
+- `server/src/routes/hooks.route.ts` implements `/v1/chat/completions` used by ElevenLabs or other agents.
+  - Accepts `messages` array (OpenAI-like), extracts the last user `transcript` (string). Supports `stream: true` (SSE) or `false` (single response JSON).
+  - Uses headers `x-user-id` / `x-session-id` or body `user_id` / `session_id`. Non-UUID `session_id` values are mapped to internal session ids via `externalSessionToInternal`.
+  - Persists the incoming user message before invoking `ConversationService` to handle the turn.
+  - For streaming calls it sends incremental `chat.completion.chunk` events as the service yields chunks.
+- Default fallback user: `ELEVENLABS_DEFAULT_USER_ID` env var.
+- Security note: the hook is convenient for integration but is unauthenticated by default — add an API key / signed secret header for production use (e.g., validate `ELEVENLABS_WEBHOOK_SECRET`).
+
+---
+
+## Quick code pointers
+- Streaming orchestration: `server/src/services/conversation.service.ts` → `handleUserTurnModelStream`
+- Mini classifier: `server/src/libs/ai/mini-brain.client.ts`
+- Counselor: `server/src/libs/ai/counselor-brain.client.ts` (streaming + JSON output)
+- Hooks: `server/src/routes/hooks.route.ts` (OpenAI-compatible endpoint)
+- RAG: `server/src/repositories/embedding.repository.ts` and `server/src/libs/ai/embedding.client.ts`
+- Persistence: `server/src/repositories/*` for messages, sessions, risk logs, memory docs
+
+---
+
+## Report (SOAP note) — where it lives & how it works
+
+```mermaid
+flowchart LR
+  client[Client or Caller]
+  reportsApi[POST /api/reports/session<br/>(server/src/routes/reports.route.ts)]
+  reportService[ReportService.generateSessionReport<br/>(server/src/services/report.service.ts)]
+  sessionReportClient[SessionReportClient<br/>(server/src/libs/ai/session-report.client.ts)]
+  vertex[Vertex: VERTEX_COUNSELOR_MODEL]
+  types[Types: shared/src/types/report.type.ts]
+
+  client -->|POST {sessionId}| reportsApi
+  reportsApi --> reportService
+  reportService --> sessionReportClient
+  sessionReportClient --> vertex
+  vertex --> sessionReportClient
+  sessionReportClient --> reportService
+  reportService -->|returns| client
+
+  classDef info fill:#fff4e6,stroke:#ffbe7a
+  note[(Note: The report generator enforces strict JSON (Zod) and returns a SOAP-style `report.soapNote`. By default the report is returned to the caller and is not persisted.)]:::info
+```
+
+- Endpoint: `POST /api/reports/session` (auth required). Implemented in `server/src/routes/reports.route.ts` and validated by `server/src/routes/validators/reports.validator.ts`.
+- Service: `ReportService.generateSessionReport(...)` collects recent messages and conversation state, constructs `systemInstruction`, and calls the `SessionReportClient`.
+- AI client: `SessionReportClient.generateReport(...)` uses `VERTEX_COUNSELOR_MODEL`, instructs it to return the `REPORT_OUTPUT_SCHEMA` (strict JSON), and validates the response with Zod (`reportSchema`). See `server/src/libs/ai/session-report.client.ts`.
+- Types: `shared/src/types/report.type.ts` defines `ConversationReport` and the `soapNote` S/O/A/P structure.
+- Persistence: Currently the service returns the report to the client (no DB storage). You can easily persist it by:
+  - Saving the JSON in a new `reports` table (recommended for history/audit), or
+  - Attaching the report JSON or `reportDocId` to the `voice_sessions` row at session end.
+- Optional workflow improvements:
+  - Auto-generate at session end inside `SessionService.endSession` (sync or background job), and emit a `report-ready` event on the bus for the client to fetch.
+  - Add `GET /api/reports/:id` and a small repository (`ReportRepository`) to list persisted reports.
 
 ---
