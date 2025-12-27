@@ -266,6 +266,7 @@ async function handleChatCompletions(c: any) {
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no",
 			Connection: "keep-alive",
+			"Transfer-Encoding": "chunked",
 		},
 	});
 }
