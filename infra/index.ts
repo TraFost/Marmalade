@@ -49,6 +49,7 @@ const googleClientSecret = serverCfg.requireSecret("googleClientSecret");
 const elevenlabsWebhookSecret = serverCfg.requireSecret(
 	"elevenlabsWebhookSecret"
 );
+const elevenLabsAgentId = serverCfg.getSecret("elevenLabsAgentId");
 const elevenlabsDefaultUserId = serverCfg.getSecret("elevenlabsDefaultUserId");
 const betterAuthSecretKey = serverCfg.requireSecret("betterAuthSecretKey");
 
@@ -76,11 +77,21 @@ const vertexMiniModel = serverCfg.get("vertexMiniModel");
 const vertexCounselorModel = serverCfg.get("vertexCounselorModel");
 const vertexEmbeddingModel = serverCfg.get("vertexEmbeddingModel");
 
-const repo = new gcp.artifactregistry.Repository(
-	"marmaladeRepo",
+const serverRepo = new gcp.artifactregistry.Repository(
+	"marmaladeServerRepo",
 	{
 		location: region,
-		repositoryId: toId(`marmalade-${stack}`, 60),
+		repositoryId: toId(`marmalade-server-${stack}`, 60),
+		format: "DOCKER",
+	},
+	{ dependsOn: services }
+);
+
+const clientRepo = new gcp.artifactregistry.Repository(
+	"marmaladeClientRepo",
+	{
+		location: region,
+		repositoryId: toId(`marmalade-client-${stack}`, 60),
 		format: "DOCKER",
 	},
 	{ dependsOn: services }
@@ -89,13 +100,28 @@ const repo = new gcp.artifactregistry.Repository(
 const clientConfig = gcp.organizations.getClientConfig({});
 
 const registryServer = `${region}-docker.pkg.dev`;
-const imageName = pulumi.interpolate`${registryServer}/${project}/${repo.repositoryId}/server:${stack}`;
+const serverImageName = pulumi.interpolate`${registryServer}/${project}/${serverRepo.repositoryId}/server:${stack}`;
+const clientImageName = pulumi.interpolate`${registryServer}/${project}/${clientRepo.repositoryId}/client:${stack}`;
 
-const image = new docker.Image("serverImage", {
-	imageName,
+const serverImage = new docker.Image("serverImage", {
+	imageName: serverImageName,
 	build: {
 		context: "..",
 		dockerfile: "../server/Dockerfile",
+		platform: "linux/amd64",
+	},
+	registry: {
+		server: registryServer,
+		username: "oauth2accesstoken",
+		password: clientConfig.then((c: { accessToken: string }) => c.accessToken),
+	},
+});
+
+const clientImage = new docker.Image("clientImage", {
+	imageName: clientImageName,
+	build: {
+		context: "..",
+		dockerfile: "../client/Dockerfile",
 		platform: "linux/amd64",
 	},
 	registry: {
@@ -126,6 +152,12 @@ new gcp.projects.IAMMember("runtimeSaCloudSqlClient", {
 	member: pulumi.interpolate`serviceAccount:${runtimeSa.email}`,
 });
 
+new gcp.projects.IAMMember("runtimeSaArtifactReader", {
+	project,
+	role: "roles/artifactregistry.reader",
+	member: pulumi.interpolate`serviceAccount:${runtimeSa.email}`,
+});
+
 const service = new gcp.cloudrunv2.Service(
 	"serverService",
 	{
@@ -149,7 +181,7 @@ const service = new gcp.cloudrunv2.Service(
 			containers: [
 				{
 					// Use the immutable digest so updates roll a new revision even if the tag stays the same.
-					image: image.repoDigest,
+					image: serverImage.repoDigest,
 					ports: {
 						containerPort: 8080,
 					},
@@ -209,6 +241,41 @@ const service = new gcp.cloudrunv2.Service(
 	{ dependsOn: services }
 );
 
+const clientService = new gcp.cloudrunv2.Service(
+	"clientService",
+	{
+		location: region,
+		name: toId(`marmalade-client-${stack}`, 63),
+		ingress: "INGRESS_TRAFFIC_ALL",
+		template: {
+			serviceAccount: runtimeSa.email,
+			scaling: {
+				minInstanceCount: 1,
+				maxInstanceCount: 10,
+			},
+			containers: [
+				{
+					image: clientImage.repoDigest,
+					ports: { containerPort: 80 },
+					startupProbe: {
+						httpGet: { path: "/", port: 80 },
+						periodSeconds: 10,
+						timeoutSeconds: 10,
+						failureThreshold: 6,
+					},
+					envs: [
+						{ name: "NODE_ENV", value: "production" },
+						{ name: "FRONTEND_URL", value: frontendUrl },
+						{ name: "VITE_BASE_URL", value: `${authUrl}/api` },
+						{ name: "VITE_ELEVENLABS_AGENT_ID", value: elevenLabsAgentId },
+					],
+				},
+			],
+		},
+	},
+	{ dependsOn: services }
+);
+
 const migrateJob = new gcp.cloudrunv2.Job(
 	"dbMigrateJob",
 	{
@@ -227,7 +294,7 @@ const migrateJob = new gcp.cloudrunv2.Job(
 				],
 				containers: [
 					{
-						image: image.repoDigest,
+						image: serverImage.repoDigest,
 						workingDir: "/app/server",
 						commands: ["node"],
 						args: ["dist/migrate.db.js"],
@@ -296,7 +363,7 @@ const kbSeedJob = new gcp.cloudrunv2.Job(
 				],
 				containers: [
 					{
-						image: image.repoDigest,
+						image: serverImage.repoDigest,
 						workingDir: "/app/server",
 						commands: ["node"],
 						args: ["dist/kb-seed.js"],
@@ -347,13 +414,21 @@ const kbSeedJob = new gcp.cloudrunv2.Job(
 	{ dependsOn: services }
 );
 
-new gcp.cloudrunv2.ServiceIamMember("publicInvoker", {
+new gcp.cloudrunv2.ServiceIamMember("publicInvokerServer", {
 	name: service.name,
 	location: service.location,
 	role: "roles/run.invoker",
 	member: "allUsers",
 });
 
-export const url = service.uri;
+new gcp.cloudrunv2.ServiceIamMember("publicInvokerClient", {
+	name: clientService.name,
+	location: clientService.location,
+	role: "roles/run.invoker",
+	member: "allUsers",
+});
+
+export const serverUrl = service.uri;
+export const clientUrl = clientService.uri;
 export const migrateJobName = migrateJob.name;
 export const kbSeedJobName = kbSeedJob.name;
