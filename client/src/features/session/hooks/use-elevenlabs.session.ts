@@ -66,24 +66,7 @@ function extractMessageText(message: any): { text: string; isDelta: boolean } {
 export function useElevenlabsSession(
 	options: UseElevenlabsSessionOptions = {}
 ): UseElevenlabsSessionReturn {
-	const { autoStart = true } = options;
-	const { user } = useAuth();
-	const userId = (user as any)?.user?.id ?? (user as any)?.userId ?? undefined;
-
 	const [micMuted, setMicMuted] = useState(false);
-	const [mode, setMode] = useState<ElevenLabsMode>("unknown");
-	const [phase, setPhase] = useState<Phase>("idle");
-	const [lastText, setLastText] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const [internalSessionId, setInternalSessionId] = useState<string | null>(
-		null
-	);
-	const [sessionMood, setSessionMood] = useState<Mood>("calm");
-
-	const internalSessionIdRef = useRef<string | null>(null);
-	const startingRef = useRef<Promise<void> | null>(null);
-	const endingRef = useRef<Promise<void> | null>(null);
-	const esRef = useRef<EventSource | null>(null);
 
 	const conversation = useConversation({
 		micMuted,
@@ -107,10 +90,7 @@ export function useElevenlabsSession(
 
 			if (nextMode === "speaking" || nextMode === "listening") {
 				setMode(nextMode as ElevenLabsMode);
-
-				if (nextMode === "listening") {
-					setLastText("");
-				}
+				if (nextMode === "speaking") setLastText("");
 				return;
 			}
 			setMode("unknown");
@@ -126,6 +106,26 @@ export function useElevenlabsSession(
 		status === "connected" || status === "connecting" ? status : "disconnected";
 	const isSpeaking = Boolean((conversation as any)?.isSpeaking);
 
+	const { autoStart = true } = options;
+	const { user } = useAuth();
+	const userId = (user as any)?.user?.id ?? (user as any)?.userId ?? undefined;
+
+	const [mode, setMode] = useState<ElevenLabsMode>("unknown");
+	const [phase, setPhase] = useState<Phase>("idle");
+	const [lastText, setLastText] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [internalSessionId, setInternalSessionId] = useState<string | null>(
+		null
+	);
+	const [sessionMood, setSessionMood] = useState<Mood>("calm");
+
+	const internalSessionIdRef = useRef<string | null>(null);
+	const startingRef = useRef<Promise<void> | null>(null);
+	const endingRef = useRef<Promise<void> | null>(null);
+	const esRef = useRef<EventSource | null>(null);
+	const statusRef = useRef(safeStatus);
+	const hasAutoStarted = useRef(false);
+
 	const orbState: OrbState = useMemo(() => {
 		if (safeStatus === "connecting") return "processing";
 		if (safeStatus !== "connected") return "idle";
@@ -134,7 +134,9 @@ export function useElevenlabsSession(
 	}, [isSpeaking, mode, safeStatus]);
 
 	const start = useCallback(async () => {
-		if (safeStatus === "connected" || safeStatus === "connecting") return;
+		if (statusRef.current === "connected" || statusRef.current === "connecting")
+			return;
+
 		if (startingRef.current) return startingRef.current;
 		setError(null);
 
@@ -169,7 +171,7 @@ export function useElevenlabsSession(
 		} finally {
 			startingRef.current = null;
 		}
-	}, [conversation, safeStatus, userId]);
+	}, [conversation, userId]);
 
 	const end = useCallback(async () => {
 		if (endingRef.current) return endingRef.current;
@@ -214,8 +216,15 @@ export function useElevenlabsSession(
 	}, [conversation]);
 
 	useEffect(() => {
-		if (autoStart) void start();
+		if (autoStart && !hasAutoStarted.current) {
+			hasAutoStarted.current = true;
+			void start();
+		}
 	}, [autoStart, start]);
+
+	useEffect(() => {
+		statusRef.current = safeStatus;
+	}, [safeStatus]);
 
 	useEffect(() => {
 		internalSessionIdRef.current = internalSessionId;
