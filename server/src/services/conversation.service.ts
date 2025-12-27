@@ -308,6 +308,7 @@ const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => {
 		riskLevel: isCrisis ? 4 : 0,
 		themes: isCrisis ? ["safety_threat"] : [],
 		suggestedAction: isCrisis ? "escalate" : "normal",
+		requiresCounselor: isCrisis ? true : false,
 	};
 };
 
@@ -650,6 +651,72 @@ export class ConversationService {
 				console.warn("[Turn] Analysis failed, using fallback.", err);
 			}
 			mini = buildMiniFallbackResult(userMessage);
+		}
+
+		if (mini.requiresCounselor === false) {
+			const userName =
+				typeof (prefs as any).name === "string" ? (prefs as any).name : null;
+			const replyText = (
+				await this.firstResponseBrain.generateFirstResponse({
+					userMessage,
+					userName,
+					mode: detectCompanionRequest(userMessage) ? "companion" : "support",
+					riskLevel: conversationState.riskLevel ?? 0,
+					companionRequested: detectCompanionRequest(userMessage),
+					isStandalone: true,
+				})
+			).trim();
+
+			await db.transaction(async (tx) => {
+				await this.states.upsert(
+					{
+						userId,
+						summary: conversationState.summary,
+						mood: previousMood,
+						riskLevel: conversationState.riskLevel,
+						lastThemes: conversationState.lastThemes,
+						baselineDepression: conversationState.baselineDepression,
+						baselineAnxiety: conversationState.baselineAnxiety,
+						baselineStress: conversationState.baselineStress,
+						preferences: prefs,
+					},
+					tx
+				);
+
+				await this.riskLogs.create(
+					{
+						userId,
+						sessionId,
+						riskLevel: mini.riskLevel,
+						mood: previousMood,
+						themes: mini.themes,
+					},
+					tx
+				);
+
+				await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
+				await this.messages.create(
+					{
+						userId,
+						sessionId,
+						role: "assistant",
+						content: replyText || "Got it.",
+						metadata: { tags: ["mini_short_circuit"] },
+						voiceMode: "comfort",
+						riskAtTurn: mini.riskLevel,
+						themes: mini.themes,
+					},
+					tx
+				);
+				await this.sessions.incrementMessageCount(sessionId, 1, tx);
+			});
+
+			return {
+				replyText: replyText || "Got it.",
+				voiceMode: "comfort",
+				mood: previousMood,
+				riskLevel: mini.riskLevel,
+			};
 		}
 
 		const coordinated = coordinateTurn({
@@ -1027,6 +1094,7 @@ export class ConversationService {
 				riskLevel: 0,
 				themes: [],
 				suggestedAction: "normal",
+				requiresCounselor: false,
 			};
 			try {
 				await this.saveTurnAsync(
@@ -1171,7 +1239,25 @@ export class ConversationService {
 				if (winner.src === "first") {
 					firstNext = null;
 					if (winner.r?.done) {
-						if (!counselorStarted) startCounselor();
+						if (!counselorStarted) {
+							if (miniPromise) {
+								let miniResult: any;
+								try {
+									miniResult = await miniPromise;
+								} catch (err) {
+									console.warn(
+										"[Turn][stream] MiniBrain failed during decision, allowing counselor by default.",
+										err
+									);
+									miniResult = { requiresCounselor: true };
+								}
+								if (miniResult.requiresCounselor === false) {
+									finalizeAndSaveAsync(firstResponseFullText);
+									return;
+								}
+							}
+							startCounselor();
+						}
 						firstNext = null;
 					} else {
 						const item = winner.r.value;
@@ -1193,6 +1279,23 @@ export class ConversationService {
 						}
 
 						if (!counselorStarted && emittedWordCount >= thresholdWords) {
+							if (miniPromise) {
+								let miniResult: any;
+								try {
+									miniResult = await miniPromise;
+								} catch (err) {
+									console.warn(
+										"[Turn][stream] MiniBrain failed during decision, allowing counselor by default.",
+										err
+									);
+									miniResult = { requiresCounselor: true };
+								}
+								if (miniResult.requiresCounselor === false) {
+									// Finalize and save the first-response only, do not start counselor
+									finalizeAndSaveAsync(firstResponseFullText);
+									return;
+								}
+							}
 							startCounselor();
 						}
 

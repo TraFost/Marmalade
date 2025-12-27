@@ -26,6 +26,7 @@ export type MiniBrainResult = {
 	riskLevel: number;
 	themes: string[];
 	suggestedAction: "normal" | "grounding_needed" | "escalate";
+	requiresCounselor: boolean;
 };
 
 const miniResponseSchema = z.object({
@@ -37,6 +38,7 @@ const miniResponseSchema = z.object({
 		.enum(["normal", "grounding_needed", "escalate"])
 		.optional()
 		.default("normal"),
+	requiresCounselor: z.boolean().optional().default(true),
 });
 
 const MINI_OUTPUT_SCHEMA = `{
@@ -44,7 +46,8 @@ const MINI_OUTPUT_SCHEMA = `{
 	"mood": "calm|sad|anxious|angry|numb|mixed",
 	"riskLevel": 0-4,
 	"themes": ["theme1"],
-	"suggestedAction": "normal|grounding_needed|escalate"
+	"suggestedAction": "normal|grounding_needed|escalate",
+	"requiresCounselor": "true|false"
 }`;
 
 export class MiniBrainClient {

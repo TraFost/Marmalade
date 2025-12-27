@@ -388,7 +388,7 @@ export function OnboardingPage() {
 	};
 
 	return (
-		<section className="bg-background h-dvh">
+		<section className="bg-background min-h-dvh">
 			<div className="flex size-full flex-col overflow-hidden bg-card lg:flex-row">
 				<aside className="w-full border-b border-border/60 bg-secondary/40 p-6 lg:w-[320px] lg:border-b-0 lg:border-r lg:p-10">
 					<div className="flex items-center gap-3 text-primary">
@@ -396,6 +396,17 @@ export function OnboardingPage() {
 						<div>
 							<p className="text-lg font-semibold text-foreground">Marmalade</p>
 							<p className="text-xs text-muted-foreground">Here for you</p>
+						</div>
+
+						<div className="ml-auto lg:hidden">
+							<button
+								type="button"
+								onClick={handleBack}
+								className="inline-flex items-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+							>
+								<CaretLeftIcon size={16} weight="bold" className="mr-1" />
+								Back
+							</button>
 						</div>
 					</div>
 
@@ -432,8 +443,8 @@ export function OnboardingPage() {
 					</div>
 				</aside>
 
-				<div className="flex-1 bg-white p-6 sm:p-10 lg:p-16">
-					<header className="flex items-center justify-between">
+				<div className="flex-1 bg-white p-6 sm:py-2 sm:px-10 lg:p-16">
+					<header className="lg:items-center lg:justify-between hidden lg:flex">
 						<div className="hidden text-sm font-medium uppercase tracking-wide text-muted-foreground sm:block">
 							Step {currentStep + 1}/{TOTAL_STEPS}
 						</div>
@@ -453,7 +464,7 @@ export function OnboardingPage() {
 
 					<footer className="mt-10 border-t border-border/50 pt-6">
 						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-							<div>
+							<div className="hidden sm:block">
 								{currentStep > 0 ? (
 									<button
 										type="button"
