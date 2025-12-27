@@ -1,9 +1,4 @@
-import type {
-	StateDelta,
-	StateMappingSignals,
-	UserStateGraph,
-	UserStateRead,
-} from "shared";
+import type { StateDelta, StateMappingSignals, UserStateGraph } from "shared";
 
 import { buildLanguageMirrorPlan } from "./language-shaper.agent";
 import { decideIntervention } from "./intervention-arbiter.agent";
@@ -20,7 +15,6 @@ export type CoordinatedTurn = {
 export const coordinateTurn = (input: {
 	userMessage: string;
 	graph: UserStateGraph;
-	stateRead: UserStateRead;
 	signals?: StateMappingSignals | null;
 }): CoordinatedTurn => {
 	const languagePlan = buildLanguageMirrorPlan(input.userMessage, {
@@ -29,17 +23,14 @@ export const coordinateTurn = (input: {
 	});
 	const delta = detectDelta({
 		graph: input.graph,
-		currentRead: input.stateRead,
 	});
 	const decision = decideIntervention({
-		stateRead: input.stateRead,
 		delta,
 		graph: input.graph,
 		signals: input.signals ?? null,
 	});
 	const nextGraph = appendReadToGraph({
 		graph: input.graph,
-		read: input.stateRead,
 		delta,
 	});
 	return { languagePlan, delta, decision, nextGraph };

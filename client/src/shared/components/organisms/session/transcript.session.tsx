@@ -1,5 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
-import { TextGenerateEffect } from "@/shared/components/atoms/text-generate-effect";
+import { AnimatePresence } from "motion/react";
 import { MessageLoading } from "@/shared/components/atoms/message-loading";
 
 type SessionTranscriptsProps = {
@@ -11,20 +10,14 @@ export function SessionTranscripts({
 	text = "",
 	showDots = true,
 }: SessionTranscriptsProps) {
+	const hasText = Boolean(text.trim().length);
 	return (
 		<div className="h-24 w-full max-w-md text-center flex flex-col items-center justify-center">
 			<AnimatePresence mode="popLayout">
-				{showDots ? (
+				{hasText ? (
+					<p key="text">{text}</p>
+				) : showDots ? (
 					<MessageLoading key="dots" />
-				) : text ? (
-					<motion.div
-						key="text"
-						initial={{ opacity: 0, y: 5 }}
-						animate={{ opacity: 1, y: 0 }}
-						className="text-2xl font-medium tracking-tight text-white/90"
-					>
-						<TextGenerateEffect words={text} />
-					</motion.div>
 				) : null}
 			</AnimatePresence>
 		</div>

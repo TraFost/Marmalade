@@ -2,7 +2,6 @@ import { VertexAI } from "@google-cloud/vertexai";
 import { z } from "zod";
 
 import { env } from "../../configs/env.config";
-import { BASE_PERSONA } from "./prompts/shared.prompt";
 
 export type CounselorBrainInput = {
 	conversationWindow: { role: string; content: string }[];
@@ -15,7 +14,6 @@ export type CounselorBrainInput = {
 		anxiety?: number | null;
 		stress?: number | null;
 	};
-	affectiveLoad?: { numbness?: number | null } | null;
 	relevantDocs?: { source: string; content: string; type?: string | null }[];
 	safetyMode: "normal" | "caution" | "high_caution" | "crisis";
 	preferences?: Record<string, unknown> | null;
@@ -46,7 +44,7 @@ export class CounselorBrainClient {
 		input: CounselorBrainInput
 	): Promise<CounselorBrainResult> {
 		const model = this.vertex.getGenerativeModel({
-			model: env.VERTEX_COUNSELOR_MODEL,
+			model: env.VERTEX_MINI_MODEL,
 			systemInstruction: {
 				parts: [{ text: input.systemInstruction }],
 				role: "system",
@@ -213,14 +211,10 @@ export class CounselorBrainClient {
 			type: d.type,
 		}));
 
-		const numbnessVal =
-			typeof input.affectiveLoad?.numbness === "number"
-				? input.affectiveLoad!.numbness
-				: null;
-
 		return [
 			"Based on the SYSTEM INSTRUCTIONS provided, generate a response for the following user context.",
 			"Respond ONLY with the JSON schema requested.",
+			"Do any deeper state interpretation internally; do NOT output extra analysis objects.",
 
 			"--- CONTEXT DATA ---",
 			`User Summary: ${input.summary ?? "None"}`,
@@ -229,7 +223,6 @@ export class CounselorBrainClient {
 			`Themes: ${JSON.stringify(input.themes)}`,
 			`Baseline Stats: ${JSON.stringify(input.baseline ?? {})}`,
 			`User Preferences: ${JSON.stringify(input.preferences ?? {})}`,
-			`Affective Numbness: ${numbnessVal ?? "unknown"}`,
 			"--- KNOWLEDGE BASE (RAG) ---",
 			docContext.length > 0
 				? JSON.stringify(docContext)
@@ -237,11 +230,6 @@ export class CounselorBrainClient {
 
 			"--- RECENT CONVERSATION ---",
 			JSON.stringify(recent),
-			"--- TTS BREATHING / PUNCTUATION GUIDELINES ---",
-			"Use commas (,) for short micro-pauses (~0.2s), periods (.) for full breaths (~0.5s), and ellipses (...) for pensive pauses (~0.8-1.2s).",
-			numbnessVal !== null && numbnessVal >= 0.6
-				? "NOTE: Affective numbness appears high; prefer ellipses '...' between reflective clauses to slow TTS pacing and convey gentle empathy."
-				: "If affective numbness is high, you may use ellipses '...' to slow delivery and add a pensive pause.",
 			"--- OUTPUT SCHEMA (JSON) ---",
 			JSON.stringify(
 				{
@@ -271,39 +259,33 @@ export class CounselorBrainClient {
 		const lastResponseSent = recent.at(-1)?.content ?? "";
 
 		return `
-		# ROLE
-		${BASE_PERSONA}
-		You are providing a seamless, natural continuation of the thought just started. 
-		Do NOT acknowledge that there was a 'first layer' or 'logic gate'. Just pick up the thread.
+		You are continuing the assistant response naturally.
+		Do NOT mention any internal layers, gates, or tooling.
 
-		# DIRECTIVES
-		- Use the last language the user used (mirror Jaksel/Indo/English).
-		- **Anti-Stall**: No "sitting with the depth" or "weight of your words." 
-		- **Directness**: If the first response was poetic, you be the grounded one. 
-		- Use the context to deepen narrative coherence and agency.
-			
+		# HARD GUARDRAILS
+		- Do NOT add heaviness or hidden-problem framing.
+		- If the user's message is a greeting/small-talk (e.g., "good morning", "hi") and there is no distress content, respond with ONE short friendly line and STOP. No probing questions.
+		- Don't repeat or re-acknowledge what was already said.
+		- Keep it concise: 5-15 words max.
+		- Use simple, natural language. No complex words or jargon.
+		- Avoid therapy clichés ("weight", "depth", "hold space").
+		- Mirror the user's language (Indo/English/Jaksel) and pronouns.
+
 		# CONTEXT
-		- **Just Sent**: "${lastResponseSent}"
-		- **User Mood**: ${input.mood}
-		- **Journey Summary**: ${input.summary}
-		- **Username**: ${nameContext}
-			
-		# MISSION
-	    1. **MIRROR PRONOUNS**: Check "Just Sent". If it used 'Gue/Lo', you MUST use 'Gue/Lo'. Maintain consistency.
-	    2. **DO NOT REPEAT**: Do not acknowledge the user's message again; the first layer already did that.
-	    3. **DEEPEN**: Connect the user's current state to the Knowledge Base (RAG) or patterns in the Journey Summary.
-	    4. **REFRAME**: Use the core thesis (grief, agency, continuity) to provide a new perspective.
-	    5. **CLOSING QUESTION**: When it fits naturally, end with a single short somatic question (location + pressure/speed/weight/emptiness) as the closing line.
+		Just Sent: "${lastResponseSent}"
+		User Mood: ${input.mood}
+		Journey Summary: ${input.summary}
+		Username: ${nameContext}
 
 		# KNOWLEDGE BASE (RAG)
 		${memoryContext || "No specific memories found for this turn."}
-			
-		# RECENT CONVERSATION HISTORY
+
+		# RECENT CONVERSATION
 		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
-		
+
 		# TTS PACING
-	        - Write naturally with gentle rhythm: use commas for pacing, avoid fragmenting sentences, and keep the tone fluid.
-		
-		START CONTINUATION NOW:`.trim();
+			- Write naturally with gentle rhytm: use commas for pacing, avoid fragmenting sentences, and keep the tone fluid
+
+		Continue now:`.trim();
 	}
 }

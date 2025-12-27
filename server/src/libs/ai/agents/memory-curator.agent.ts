@@ -4,9 +4,11 @@ const nowIso = () => new Date().toISOString();
 
 export const appendReadToGraph = (input: {
 	graph: UserStateGraph;
-	read: UserStateRead;
+	read?: UserStateRead | null;
 	delta?: any;
 }): UserStateGraph => {
+	if (!input.read) return input.graph;
+
 	const next: UserStateGraph = {
 		...input.graph,
 		version: 1,
