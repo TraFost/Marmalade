@@ -3,6 +3,7 @@ export * from "./types/memory.type.js";
 export * from "./types/message.type.js";
 export * from "./types/response.type.js";
 export * from "./types/risk.type.js";
+export * from "./types/report.type.js";
 export * from "./types/screening.type.js";
 export * from "./types/state-graph.type.js";
 export * from "./types/session.type.js";
