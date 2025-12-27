@@ -244,6 +244,7 @@ export class SessionReportClient {
 			"You generate an AI-generated therapy preparation report.",
 			"Use SOAP note structure for the report (Subjective, Objective, Assessment, Plan).",
 			"NEVER provide a medical diagnosis. NEVER label disorders. Use neutral observational language.",
+			"Non-diagnostic, reflective summary, not medical advice.",
 			"NEVER include safety instructions beyond a brief non-alarming note; do not give crisis hotlines.",
 			"Return ONLY strict JSON matching the schema below. No extra keys.",
 			REPORT_OUTPUT_SCHEMA,
