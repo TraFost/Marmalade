@@ -24,6 +24,7 @@ import type {
 	UserStateGraph,
 } from "shared";
 import { BASE_PERSONA } from "../libs/ai/prompts/shared.prompt";
+import { logger } from "../libs/logger";
 
 type DBClient = typeof db;
 const allowedMoods = [
@@ -620,6 +621,15 @@ export class ConversationService {
 		);
 
 		emitter.emit("phase", { phase: "analyzing", mood: previousMood });
+		logger.info(
+			{
+				userId,
+				sessionId,
+				snippet: userMessage.slice(0, 120),
+				recentCount: recent.length,
+			},
+			"[Turn] Starting MiniBrain.analyzeTurn"
+		);
 		let mini: MiniBrainResult;
 		try {
 			mini = await this.miniBrain.analyzeTurn({
@@ -641,19 +651,38 @@ export class ConversationService {
 			});
 		} catch (err) {
 			if (isMiniValidationError(err)) {
-				console.warn(
-					"[Turn] MiniBrain validation failed, using fallback.",
-					err
+				logger.warn(
+					{ err },
+					"[Turn] MiniBrain validation failed, using fallback"
 				);
 			} else if (err instanceof AppError) {
 				throw err;
 			} else {
-				console.warn("[Turn] Analysis failed, using fallback.", err);
+				logger.warn({ err }, "[Turn] Analysis failed, using fallback");
 			}
 			mini = buildMiniFallbackResult(userMessage);
 		}
 
+		logger.info(
+			{
+				requiresCounselor: mini.requiresCounselor,
+				riskLevel: mini.riskLevel,
+				mood: mini.mood,
+				themes: mini.themes,
+				summaryDelta: (mini.summaryDelta || "").slice(0, 120),
+			},
+			"[Turn] MiniBrain result"
+		);
+
 		if (mini.requiresCounselor === false) {
+			logger.info(
+				{
+					userId,
+					sessionId,
+					snippet: userMessage.slice(0, 120),
+				},
+				"[Turn] Mini decided to skip Counselor — short-circuiting"
+			);
 			const userName =
 				typeof (prefs as any).name === "string" ? (prefs as any).name : null;
 			const replyText = (
@@ -728,7 +757,10 @@ export class ConversationService {
 		const nextSummary = [conversationState.summary, mini.summaryDelta]
 			.filter(Boolean)
 			.join("\n");
-
+		logger.info(
+			{ delta: coordinated.delta, decision: coordinated.decision },
+			"[Turn] Coordinated decision"
+		);
 		const mood = normalizeMood(mini.mood);
 
 		emitter.emit("phase", { phase: "recalling", mood });
@@ -747,7 +779,10 @@ export class ConversationService {
 		});
 
 		emitter.emit("phase", { phase: "formulating", mood });
-
+		logger.info(
+			{ isHighRisk, mood: mini.mood, riskLevel: mini.riskLevel },
+			"[Turn] Preparing Counselor generation"
+		);
 		const counselor = isHighRisk
 			? {
 					replyText:
@@ -973,9 +1008,9 @@ export class ConversationService {
 				})
 				.catch((error) => {
 					if (isMiniValidationError(error)) {
-						console.warn(
-							"[Turn][stream] MiniBrain validation failed, sending fallback",
-							error
+						logger.warn(
+							{ error },
+							"[Turn][stream] MiniBrain validation failed, sending fallback"
 						);
 						return buildMiniFallbackResult(userMessage);
 					}
@@ -983,6 +1018,34 @@ export class ConversationService {
 				});
 
 			ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
+
+			logger.info(
+				{ userId, sessionId, isStandalone },
+				"[Turn][stream] Started miniPromise and ragPromise"
+			);
+
+			miniPromise
+				?.then((r) =>
+					logger.info(
+						{
+							mini: {
+								requiresCounselor: r?.requiresCounselor,
+								risk: r?.riskLevel,
+							},
+						},
+						"[Turn][stream] Mini resolved"
+					)
+				)
+				.catch((e) => logger.warn({ err: e }, "[Turn][stream] Mini failed"));
+
+			ragPromise
+				?.then((r) =>
+					logger.info(
+						{ count: Array.isArray(r) ? r.length : null },
+						"[Turn][stream] RAG resolved"
+					)
+				)
+				.catch((e) => logger.warn({ err: e }, "[Turn][stream] RAG failed"));
 		}
 		const sessionRes =
 			dataResults[0]?.status === "fulfilled" ? dataResults[0].value : null;
@@ -1012,7 +1075,7 @@ export class ConversationService {
 					[]
 				);
 			} catch (err) {
-				console.error("Failed to save ellipsis short-circuit turn:", err);
+				logger.error({ err }, "Failed to save ellipsis short-circuit turn");
 			}
 			return;
 		}
@@ -1037,7 +1100,7 @@ export class ConversationService {
 					[]
 				);
 			} catch (err) {
-				console.error("Failed to save greeting short-circuit turn:", err);
+				logger.error({ err }, "Failed to save greeting short-circuit turn");
 			}
 			return;
 		}
@@ -1088,6 +1151,11 @@ export class ConversationService {
 
 			const finalContent = firstResponseFullText.trim();
 
+			logger.info(
+				{ userId, sessionId, length: finalContent.length },
+				"[Turn][stream] Saving trivial first-response only"
+			);
+
 			const miniDummy = {
 				summaryDelta: "",
 				mood: "mixed",
@@ -1107,8 +1175,12 @@ export class ConversationService {
 					{ ...stateRes, preferences: { ...prefs, userStateGraph: baseGraph } },
 					[]
 				);
+				logger.info(
+					{ userId, sessionId, len: finalContent.length },
+					"[Turn][stream] trivial turn saved"
+				);
 			} catch (err) {
-				console.error("Failed to save trivial turn:", err);
+				logger.error({ err }, "Failed to save trivial turn");
 			}
 
 			return;
@@ -1150,11 +1222,19 @@ export class ConversationService {
 		const startCounselor = () => {
 			if (counselorStarted) return;
 			counselorStarted = true;
+			logger.info(
+				{ userId, sessionId, emittedWordCount, thresholdWords },
+				"[Turn][stream] startCounselor (warming up)"
+			);
 
 			const history = (recentMessages as any[])
 				.map((m) => ({ role: m.role, content: m.content }))
 				.reverse()
 				.concat([{ role: "assistant", content: firstResponseFullText }]);
+			logger.info(
+				{ historyLength: history.length },
+				"[Turn][stream] Counselor history prepared"
+			);
 
 			const stream = this.counselorBrain.generateReplyTextStream({
 				conversationWindow: history,
@@ -1190,7 +1270,7 @@ export class ConversationService {
 				try {
 					[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
 				} catch (_e) {
-					console.warn("[Turn] Analysis failed, using fallback.");
+					logger.warn("[Turn] Analysis failed, using fallback.");
 					mini = {
 						summaryDelta: "",
 						mood: "mixed",
@@ -1220,7 +1300,7 @@ export class ConversationService {
 					},
 					relevantDocs
 				);
-			})().catch((err) => console.error("Save failed", err));
+			})().catch((err) => logger.error({ err }, "Save failed"));
 		};
 
 		try {
@@ -1291,7 +1371,6 @@ export class ConversationService {
 									miniResult = { requiresCounselor: true };
 								}
 								if (miniResult.requiresCounselor === false) {
-									// Finalize and save the first-response only, do not start counselor
 									finalizeAndSaveAsync(firstResponseFullText);
 									return;
 								}
@@ -1345,7 +1424,7 @@ export class ConversationService {
 				}
 			}
 		} catch (err) {
-			console.error("Turn streaming failed:", err);
+			logger.error({ err }, "Turn streaming failed");
 			if (!firstResponseFullText) {
 				firstResponseFullText = EMERGENCY_PACKET.replyText;
 				yield { text: firstResponseFullText, voiceMode: "comfort" };
@@ -1415,9 +1494,9 @@ export class ConversationService {
 			});
 			(sessionMeta as any).stateMappingContext = mappingContext;
 		} catch (e) {
-			console.warn(
-				"Failed to fetch state mapping context for session summary",
-				e
+			logger.warn(
+				{ err: e },
+				"Failed to fetch state mapping context for session summary"
 			);
 		}
 
@@ -1471,7 +1550,10 @@ export class ConversationService {
 		try {
 			return await Promise.race([promise, timeoutPromise]);
 		} catch (error) {
-			console.error("Counselor agent failed, using emergency packet", error);
+			logger.error(
+				{ err: error },
+				"Counselor agent failed, using emergency packet"
+			);
 			return EMERGENCY_PACKET as T;
 		} finally {
 			if (timeoutHandle) clearTimeout(timeoutHandle);

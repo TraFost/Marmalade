@@ -1,5 +1,6 @@
 import { VertexAI } from "@google-cloud/vertexai";
 import { z, ZodError } from "zod";
+import { logger } from "../logger";
 import { AppError } from "../helper/error.helper";
 
 import { env } from "../../configs/env.config";
@@ -38,7 +39,13 @@ const miniResponseSchema = z.object({
 		.enum(["normal", "grounding_needed", "escalate"])
 		.optional()
 		.default("normal"),
-	requiresCounselor: z.boolean().optional().default(true),
+	requiresCounselor: z
+		.preprocess(
+			(val) => (typeof val === "string" ? val === "true" : val),
+			z.boolean()
+		)
+		.optional()
+		.default(true),
 });
 
 const MINI_OUTPUT_SCHEMA = `{
@@ -47,7 +54,7 @@ const MINI_OUTPUT_SCHEMA = `{
 	"riskLevel": 0-4,
 	"themes": ["theme1"],
 	"suggestedAction": "normal|grounding_needed|escalate",
-	"requiresCounselor": "true|false"
+	"requiresCounselor": true or false (boolean, not string)
 }`;
 
 export class MiniBrainClient {
@@ -110,14 +117,17 @@ export class MiniBrainClient {
 
 		try {
 			const tokenMeta = res?.response ?? null;
-			console.info("[AI][Mini] Vertex response (trimmed):", {
-				candidates: (tokenMeta?.candidates ?? []).length,
-				metadata: (tokenMeta as any)?.metadata ?? null,
-			});
+			logger.info(
+				{
+					candidates: (tokenMeta?.candidates ?? []).length,
+					metadata: (tokenMeta as any)?.metadata ?? null,
+				},
+				"[AI][Mini] Vertex response (trimmed)"
+			);
 			const usage = extractTokenUsage(res);
-			if (usage) console.info("[AI][Mini] token usage:", usage);
+			if (usage) logger.info({ usage }, "[AI][Mini] token usage");
 		} catch (logErr) {
-			console.warn("[AI][Mini] Failed to log Vertex response:", logErr);
+			logger.warn({ logErr }, "[AI][Mini] Failed to log Vertex response");
 		}
 
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
@@ -125,10 +135,10 @@ export class MiniBrainClient {
 		try {
 			parsed = JSON.parse(raw);
 		} catch (error) {
-			console.warn("[AI][Mini] Failed to parse JSON from MiniBrain:", {
-				error: (error as Error).message,
-				raw,
-			});
+			logger.warn(
+				{ error: (error as Error).message, raw },
+				"[AI][Mini] Failed to parse JSON from MiniBrain"
+			);
 			throw new AppError(
 				"MiniBrain response was not valid JSON",
 				400,
@@ -141,10 +151,10 @@ export class MiniBrainClient {
 			parsedRes = miniResponseSchema.parse(parsed) as any;
 		} catch (err) {
 			if (err instanceof ZodError) {
-				console.warn("[AI][Mini] MiniBrain response failed validation:", {
-					issues: err.issues,
-					raw,
-				});
+				logger.warn(
+					{ issues: err.issues, raw },
+					"[AI][Mini] MiniBrain response failed validation"
+				);
 				throw new AppError(
 					"MiniBrain response failed validation",
 					400,
