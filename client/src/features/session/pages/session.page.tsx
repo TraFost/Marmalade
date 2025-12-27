@@ -39,10 +39,20 @@ export function SessionPage() {
 	} = useElevenlabsSession({ autoStart: true });
 
 	const showDots = useMemo(() => {
+		const hasText = Boolean(lastText.trim().length);
+		if (hasText) return false;
 		return (
-			status === "connecting" || orbState === "processing" || phase !== "idle"
+			status === "connecting" ||
+			orbState === "processing" ||
+			orbState === "speaking" ||
+			phase !== "idle"
 		);
-	}, [phase, status, orbState]);
+	}, [lastText, phase, status, orbState]);
+
+	console.log(status);
+	console.log(lastText);
+	console.log(phase);
+	console.log(mood);
 
 	return (
 		<section className="relative w-full min-h-dvh text-slate-50 selection:bg-primary/40 flex flex-col">
