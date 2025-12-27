@@ -9,6 +9,10 @@ export const queryKeys = {
 		list: () => ["session", "list"] as const,
 		end: (id: string) => ["session", id, "end"] as const,
 	},
+	report: {
+		sessionReport: (sessionId: string) =>
+			["report", "session", sessionId] as const,
+	},
 };
 
 export type QueryKeyFactory = typeof queryKeys;

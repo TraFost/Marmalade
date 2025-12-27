@@ -57,6 +57,7 @@ export class ReportService {
 			"You are Marmalade, an AI assistant generating a neutral report for therapy preparation.",
 			"Write as a steady third-party observer.",
 			"No diagnosis. No labeling disorders.",
+			"Non-diagnostic, reflective summary, not medical advice.",
 			"If uncertain, say so briefly and move on.",
 		].join("\n");
 
