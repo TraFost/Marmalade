@@ -17,7 +17,7 @@ config:
   server:elevenlabsDefaultUserId:
     secure: AAABAFr5dBl7lB3iB9JozF8m0kEyPFOmjB/G45KJaP1hM+5cymJUwLRbnIX1CD/RUB5GnO4XW2g4Y5RKr1vjOQ==
   server:authUrl: https://marmalade-server-dev-wtqtqgidiq-uc.a.run.app
-  server:frontendUrl: http://localhost:5173
+  server:frontendUrl: https://marmalade-client-dev-wtqtqgidiq-uc.a.run.app/
   server:vertexMiniModel: gemini-2.5-flash
   server:vertexCounselorModel: gemini-2.5-pro
   server:vertexEmbeddingModel: text-embedding-005
