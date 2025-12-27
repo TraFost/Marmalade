@@ -1291,7 +1291,6 @@ export class ConversationService {
 									miniResult = { requiresCounselor: true };
 								}
 								if (miniResult.requiresCounselor === false) {
-									// Finalize and save the first-response only, do not start counselor
 									finalizeAndSaveAsync(firstResponseFullText);
 									return;
 								}

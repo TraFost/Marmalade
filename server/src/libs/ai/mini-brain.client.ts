@@ -38,7 +38,13 @@ const miniResponseSchema = z.object({
 		.enum(["normal", "grounding_needed", "escalate"])
 		.optional()
 		.default("normal"),
-	requiresCounselor: z.boolean().optional().default(true),
+	requiresCounselor: z
+		.preprocess(
+			(val) => (typeof val === "string" ? val === "true" : val),
+			z.boolean()
+		)
+		.optional()
+		.default(true),
 });
 
 const MINI_OUTPUT_SCHEMA = `{
@@ -47,7 +53,7 @@ const MINI_OUTPUT_SCHEMA = `{
 	"riskLevel": 0-4,
 	"themes": ["theme1"],
 	"suggestedAction": "normal|grounding_needed|escalate",
-	"requiresCounselor": "true|false"
+	"requiresCounselor": true or false (boolean, not string)
 }`;
 
 export class MiniBrainClient {
