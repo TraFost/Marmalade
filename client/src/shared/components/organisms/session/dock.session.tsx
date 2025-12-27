@@ -46,7 +46,11 @@ export function SessionDock({
 	};
 
 	const toggleMode = () => {
-		setIsTextMode((prev) => !prev);
+		setIsTextMode((prev) => {
+			const next = !prev;
+			onMicMutedChange?.(next);
+			return next;
+		});
 		setShowMenu(false);
 	};
 
