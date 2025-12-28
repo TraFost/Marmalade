@@ -1,6 +1,7 @@
 import { GoogleLogoIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/shared/components/atoms/button";
+import { BackButton } from "@/shared/components/atoms/back-button";
 
 interface Props {
 	onSignIn: () => void;
@@ -9,6 +10,10 @@ interface Props {
 export function LoginForm({ onSignIn }: Props) {
 	return (
 		<section className="flex min-h-screen bg-zinc-50 px-4 py-16 md:py-32 dark:bg-transparent">
+			<div className="absolute top-6 left-6">
+				<BackButton onHandleBack={() => window.history.back()} />
+			</div>
+
 			<form action="" className="max-w-92 m-auto h-fit w-full">
 				<div className="p-6">
 					<div className="text-center">

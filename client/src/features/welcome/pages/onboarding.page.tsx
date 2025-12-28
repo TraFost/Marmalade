@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightIcon, CaretLeftIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/shared/components/atoms/button";
 import { Logo } from "@/shared/components/atoms/logo";
@@ -10,6 +10,7 @@ import { PhysicalHealthStep } from "@/shared/components/organisms/onboarding/ste
 import { SelfAnalysisStep } from "@/shared/components/organisms/onboarding/steps/self-analysis.step";
 import { SpecialistPreferencesStep } from "@/shared/components/organisms/onboarding/steps/specialist-preferences.step";
 import { StepIndicatorList } from "@/shared/components/organisms/onboarding/steps/indicator.step";
+import { BackButton } from "@/shared/components/atoms/back-button";
 import { useUpsertStateMapping } from "@/features/welcome/hooks/use-mutation.onboarding";
 import { useAuth } from "@/shared/hooks/use-auth.hook";
 import { useStateMappingGraph } from "@/features/welcome/hooks/use-query.onboarding";
@@ -399,14 +400,7 @@ export function OnboardingPage() {
 						</div>
 
 						<div className="ml-auto lg:hidden">
-							<button
-								type="button"
-								onClick={handleBack}
-								className="inline-flex items-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-							>
-								<CaretLeftIcon size={16} weight="bold" className="mr-1" />
-								Back
-							</button>
+							<BackButton onHandleBack={handleBack} />
 						</div>
 					</div>
 
@@ -466,14 +460,7 @@ export function OnboardingPage() {
 						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<div className="hidden sm:block">
 								{currentStep > 0 ? (
-									<button
-										type="button"
-										onClick={handleBack}
-										className="inline-flex items-center text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-									>
-										<CaretLeftIcon size={16} weight="bold" className="mr-1" />
-										Back
-									</button>
+									<BackButton onHandleBack={handleBack} />
 								) : (
 									<span className="text-sm text-muted-foreground">
 										Let us get to know you
