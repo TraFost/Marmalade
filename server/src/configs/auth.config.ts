@@ -27,7 +27,7 @@ export const auth = betterAuth({
 		},
 	},
 	baseURL: env.BASE_URL,
-	trustedOrigins: [env.FRONTEND_URL],
+	trustedOrigins: [env.FRONTEND_URL, "http://localhost:5173"],
 	advanced: {
 		defaultCookieAttributes: {
 			sameSite: "None",
