@@ -48,7 +48,6 @@ export function SessionPage() {
 			let res:
 				| {
 						sessionId: string;
-						summary?: string | null;
 						endedAt?: string;
 				  }
 				| undefined;
@@ -64,7 +63,6 @@ export function SessionPage() {
 					state: {
 						sessionId: sid,
 						endedAt: res?.endedAt ?? endedAt,
-						summary: res?.summary ?? null,
 					},
 				});
 			}

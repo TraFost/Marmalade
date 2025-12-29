@@ -1,9 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "react-router";
+import { FileDocIcon } from "@phosphor-icons/react";
 
 import { Button } from "@/shared/components/atoms/button";
 import { MessageLoading } from "@/shared/components/atoms/message-loading";
+import { SummarySkeleton } from "@/shared/components/molecules/summary-skeleton";
+
 import { useGenerateSessionReportPdf } from "@/features/session/hooks/use-mutation.report";
+import { downloadPdfFromBytes } from "../utils/download-pdf";
 
 type LocationState = {
 	sessionId?: string;
@@ -34,7 +38,6 @@ export function PostSessionPage() {
 
 	const sessionId = String(state.sessionId ?? params.id ?? "");
 	const endedAt = state.endedAt;
-	const summary = state.summary;
 
 	const [showError, setShowError] = useState(false);
 	const generate = useGenerateSessionReportPdf();
@@ -45,17 +48,33 @@ export function PostSessionPage() {
 		[endedAt]
 	);
 
+	useEffect(() => {
+		if (canGenerate) {
+			generate.mutate({ sessionId });
+		}
+	}, [canGenerate]);
+
+	const downloadPdf = () => {
+		downloadPdfFromBytes(
+			generate.data?.pdf ?? new ArrayBuffer(0),
+			sessionId,
+			() => {
+				setShowError(true);
+			}
+		);
+	};
+
 	return (
 		<section className="min-h-dvh flex flex-col items-center justify-center p-4 bg-background text-foreground">
 			<main className="w-full max-w-md">
 				<div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
 					<div className="p-8 pb-4 border-b border-border/30">
 						<div className="flex items-center gap-3 mb-4">
-							<span className="flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-muted-foreground">
-								<span className="text-xs font-mono">PDF</span>
+							<span className="flex items-center justify-center size-9 rounded-full bg-secondary text-muted-foreground">
+								<FileDocIcon size={16} />
 							</span>
 							<span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-								Report Ready
+								{generate.data?.report ? "Report Ready" : "Generating Report"}
 							</span>
 						</div>
 
@@ -85,16 +104,18 @@ export function PostSessionPage() {
 							</div>
 						</div>
 
-						{summary ? (
+						{generate.data?.report?.generalSummary && (
 							<div className="bg-secondary rounded p-4 border border-border/60">
 								<h3 className="text-xs font-semibold text-foreground mb-1">
 									Summary
 								</h3>
 								<p className="text-xs text-muted-foreground leading-relaxed">
-									{summary}
+									{generate.data?.report?.generalSummary}
 								</p>
 							</div>
-						) : null}
+						)}
+
+						{generate.isPending ? <SummarySkeleton /> : null}
 
 						{(showError || generate.isError) && (
 							<div className="bg-destructive/5 border border-destructive/20 rounded p-3 flex items-start gap-3">
@@ -118,26 +139,17 @@ export function PostSessionPage() {
 						<Button
 							className="w-full h-10 rounded-md"
 							disabled={!canGenerate || generate.isPending}
-							onClick={async () => {
-								if (!canGenerate || generate.isPending) return;
-								setShowError(false);
-								try {
-									await generate.mutateAsync({ sessionId });
-								} catch {
-									setShowError(true);
-								}
-							}}
+							onClick={downloadPdf}
 						>
-							{generate.isPending ? <MessageLoading /> : null}
 							<span>
-								{generate.isPending
-									? "Generating..."
-									: "Generate & Download Report"}
+								{generate.isPending ? "Generating" : "Download Report"}
 							</span>
+							{generate.isPending ? <MessageLoading /> : null}
 						</Button>
 
 						<p className="text-[10px] text-center text-muted-foreground mt-4">
-							Document is generated on-demand. No local storage used.
+							Document is generated on-demand. No local storage used. No
+							personal data saved.
 						</p>
 					</div>
 				</div>

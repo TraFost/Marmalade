@@ -288,8 +288,6 @@ export function useElevenlabsSession(
 			const endedAt = new Date().toISOString();
 			let endResult: {
 				sessionId: string;
-				summaryDocId: string;
-				summary: string;
 			} | null = null;
 			try {
 				esRef.current?.close();
