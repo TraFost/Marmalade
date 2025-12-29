@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { getSessionReport } from "@/features/session/services/api.report";
 import { generatePdfFromReport } from "@/features/session/lib/session-report-pdf.client";
+import type { ConversationReport } from "shared";
 
 type GenerateReportInput = { sessionId: string; messageLimit?: number };
 
@@ -9,14 +10,16 @@ export function useGenerateSessionReportPdf() {
 		mutationFn: async (body: GenerateReportInput) => {
 			const res = await getSessionReport(body);
 			const pdfBytes = await generatePdfFromReport(res.report, res.meta);
-			return pdfBytes;
+			return { pdf: pdfBytes, report: res.report };
 		},
 		onSuccess: (
-			data: ArrayBuffer | Uint8Array,
+			data: { pdf: ArrayBuffer | Uint8Array; report: ConversationReport },
 			variables: GenerateReportInput
 		) => {
 			try {
-				const bytes = new Uint8Array(data instanceof Uint8Array ? data : data);
+				const bytes = new Uint8Array(
+					data.pdf instanceof Uint8Array ? data.pdf : data.pdf
+				);
 				const blob = new Blob([bytes], { type: "application/pdf" });
 
 				const url = URL.createObjectURL(blob);
