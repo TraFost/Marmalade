@@ -1046,11 +1046,13 @@ export class ConversationService {
 		const turnController =
 			options?.abortController ?? this.beginTurn(sessionId);
 		const signal = turnController.signal;
-		const abortErr = () => new AppError("Turn aborted", 409, "TURN_ABORTED");
 		const isAborted = () => Boolean(signal?.aborted);
+
 		const throwIfAborted = () => {
-			if (isAborted()) throw abortErr();
+			if (isAborted()) return true;
+			return false;
 		};
+
 		let abortListener: (() => void) | null = null;
 		const abortPromise: Promise<"aborted"> | null = signal
 			? new Promise((resolve) => {
@@ -1222,7 +1224,7 @@ export class ConversationService {
 						} catch {
 							// ignore
 						}
-						throw abortErr();
+						if (throwIfAborted()) return;
 					}
 					const chunk = item?.text ?? item;
 					const usage = item?.usage;

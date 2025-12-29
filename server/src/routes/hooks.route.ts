@@ -208,7 +208,7 @@ async function handleChatCompletions(c: any) {
 					transcript,
 					{ abortController: turnController }
 				)) {
-					if (chunk.text) {
+					if (chunk.text && chunk.text !== "...") {
 						send({
 							id,
 							object: "chat.completion.chunk",
