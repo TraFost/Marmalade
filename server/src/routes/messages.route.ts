@@ -12,6 +12,7 @@ import { SessionService } from "../services/session.service";
 import { MessageRepository } from "../repositories/message.repository";
 import { ConversationService } from "../services/conversation.service";
 import { db } from "../libs/db/db.lib";
+import { logger } from "../libs/logger";
 import type { TextMessageRequest, TextMessageResponse } from "shared";
 
 const sessionService = new SessionService();
@@ -24,10 +25,26 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 		try {
 			const user = c.get("user");
 			const body = c.req.valid("json") as TextMessageRequest;
+			logger.info(
+				{
+					userId: user!.id,
+					requestedSessionId: body.sessionId,
+					snippet: body.message?.slice(0, 120),
+				},
+				"Incoming /text request"
+			);
 
 			const session = await sessionService.ensureSession(
 				user!.id,
 				body.sessionId
+			);
+			logger.info(
+				{
+					userId: user!.id,
+					requestedSessionId: body.sessionId,
+					resolvedSessionId: session.id,
+				},
+				"Resolved session for incoming message"
 			);
 
 			await db.transaction(async (tx) => {
@@ -71,6 +88,7 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 			);
 
 			const emitter = getEmitter(sessionId);
+			logger.info({ sessionId }, "SSE /events - subscriber registered");
 
 			let onData: ((data: any) => void) | undefined;
 			let onEnd: (() => void) | undefined;
@@ -78,8 +96,10 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 			let __heartbeat: any = null;
 			const stream = new ReadableStream({
 				start(controller) {
+					const s = `event: start\ndata: {}\n\n`;
+					logger.info({ sessionId }, "SSE /events - stream started");
 					onData = (data: any) => {
-						const s = `event: phase\ndata: ${JSON.stringify(data)}\n\n`;
+						logger.info({ sessionId, data }, "SSE /events - phase event");
 						controller.enqueue(new TextEncoder().encode(s));
 					};
 
@@ -101,7 +121,7 @@ const messagesRoute = new Hono<{ Variables: AuthContext }>()
 					}, 15000);
 				},
 				cancel() {
-					emitter.off("phase", onData!);
+					logger.info({ sessionId }, "SSE /events - client disconnected");
 					emitter.off("end", onEnd!);
 
 					if (__heartbeat) {
