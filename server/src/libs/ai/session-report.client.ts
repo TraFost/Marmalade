@@ -33,6 +33,7 @@ const reportSchema: z.ZodType<ConversationReport> = z
 		version: z.literal(1),
 		generatedAt: z.string().min(1),
 		reportTitle: z.string().min(1),
+		generalSummary: z.string().min(1),
 		disclaimer: z.string().min(1),
 		dataCoverage: z.object({
 			turnsIncluded: z.number().int().min(0),
@@ -133,6 +134,7 @@ const REPORT_OUTPUT_SCHEMA = `{
   "version": 1,
   "generatedAt": "ISO timestamp",
   "reportTitle": "string",
+  "generalSummary": "A warm, 2-3 sentence empathetic summary of the session. Use human-centric language, not clinical terms.",
   "disclaimer": "string",
   "dataCoverage": { "turnsIncluded": 0, "truncated": false },
   "soapNote": {
@@ -243,6 +245,8 @@ export class SessionReportClient {
 		return [
 			"You generate an AI-generated therapy preparation report.",
 			"Use SOAP note structure for the report (Subjective, Objective, Assessment, Plan).",
+			"For the 'generalSummary' field, use a warm, empathetic, and human persona (Marmalade).",
+			"Avoid clinical jargon or metrics in the generalSummary. Focus on validating the user's feelings (e.g., 'Today we sat with a heavy heart' rather than 'user exhibited symptoms of sadness').",
 			"NEVER provide a medical diagnosis. NEVER label disorders. Use neutral observational language.",
 			"Non-diagnostic, reflective summary, not medical advice.",
 			"NEVER include safety instructions beyond a brief non-alarming note; do not give crisis hotlines.",
