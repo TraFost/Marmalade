@@ -2,6 +2,7 @@ export type ConversationReport = {
 	version: 1;
 	generatedAt: string;
 	reportTitle: string;
+	generalSummary: string;
 	disclaimer: string;
 	dataCoverage: {
 		turnsIncluded: number;

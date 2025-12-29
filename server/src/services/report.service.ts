@@ -27,6 +27,14 @@ export class ReportService {
 			throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
 		}
 
+		if (!session.endedAt) {
+			throw new AppError(
+				"Session has not finished yet",
+				400,
+				"SESSION_NOT_FINISHED"
+			);
+		}
+
 		const limit = Math.min(
 			Math.max(20, opts.messageLimit ?? DEFAULT_MESSAGE_LIMIT),
 			400

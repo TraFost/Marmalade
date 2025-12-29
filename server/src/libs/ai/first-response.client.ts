@@ -192,7 +192,12 @@ export class FirstResponseClient {
 			"- No meta talk (no AI, no system, no layers).",
 			isStandalone ? "- You MAY greet back." : "- Do NOT greet back.",
 			"- You may reflect an explicit contrast or feeling stated by the user, without analysis.",
-
+			'- Avoid impersonal or generalized phrasing (e.g., "can feel", "often", "many people").',
+			"- Do not infer causes or reasons the user did not explicitly state.",
+			"- Do not narrate the user's thoughts or questions; reflect only the lived experience.",
+			"- Write as recognition of the present experience, not a retelling or summary.",
+			'- Use direct second-person recognition ("you") rather than observational framing.',
+			"- Use natural noun/adjective forms for internal states (e.g., “hollow inside,” “hollowness”), avoid awkward abstractions.",
 			"",
 			`USER: ${name}`,
 			`RISK: ${input.riskLevel}`,
