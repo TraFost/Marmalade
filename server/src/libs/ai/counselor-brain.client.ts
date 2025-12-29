@@ -271,14 +271,18 @@ export class CounselorBrainClient {
 		- Length: up to 40 words when responseClass ≠ "understanding"
 		- Use simple, natural language.
 		- Avoid therapy clichés.
-		- Match the user's language choice (Indo/English), NOT emotional intensity.
-		- No questions unless risk level >= 3.
+		- Do not ask exploratory or reflective questions unless riskLevel ≥ 2 AND groundingEligible is true, OR explicitly allowed by InterventionArbiter.
+		- If riskLevel ≥ 3, prioritize safety, grounding, and de-escalation.
+		- If riskLevel = 4, use crisis voice and grounding ONLY. No coaching or exercises.
+
 			
 		# CONTEXT
 		Just Sent: "${lastResponseSent}"
 		User Mood: ${input.mood}
 		Journey Summary: ${input.summary}
 		Username Rule: ${nameContext}
+		User Risk Level: ${input.riskLevel} (Safety Mode: ${input.safetyMode})
+		User Themes: ${input.themes.join(", ")}
 			
 		# KNOWLEDGE BASE
 		${memoryContext || "No relevant memories for this turn."}
