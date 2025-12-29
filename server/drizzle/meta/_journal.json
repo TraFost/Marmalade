@@ -8,6 +8,13 @@
       "when": 1766329441531,
       "tag": "0000_stormy_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766979702813,
+      "tag": "0001_loose_machine_man",
+      "breakpoints": true
     }
   ]
 }

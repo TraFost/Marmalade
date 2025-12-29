@@ -12,6 +12,7 @@ export const voiceSessions = pgTable("voice_sessions", {
 		.defaultNow()
 		.notNull(),
 	endedAt: timestamp("ended_at", { withTimezone: true, mode: "date" }),
+	externalId: text("external_id"),
 	maxRiskLevel: integer("max_risk_level").default(0).notNull(),
 	messageCount: integer("message_count").default(0).notNull(),
 	durationSeconds: integer("duration_seconds"),
