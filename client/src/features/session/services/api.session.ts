@@ -20,3 +20,7 @@ export async function endSession(sessionId: string) {
 	>(`${BASE_URL}/end`, { sessionId });
 	return response.data.data;
 }
+
+export async function cancelTurn(sessionId: string) {
+	await axiosInstance.post(`${BASE_URL}/cancel`, { sessionId });
+}

@@ -49,11 +49,6 @@ export function SessionPage() {
 		);
 	}, [lastText, phase, status, orbState]);
 
-	console.log(status);
-	console.log(lastText);
-	console.log(phase);
-	console.log(mood);
-
 	return (
 		<section className="relative w-full min-h-dvh text-slate-50 selection:bg-primary/40 flex flex-col">
 			<AmbientBackground mood={mood} crisisMode={false} />

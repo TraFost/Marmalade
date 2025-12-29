@@ -5,6 +5,7 @@ import { env } from "@/shared/config/env.config";
 import { useAuth } from "@/shared/hooks/use-auth.hook";
 import {
 	endSession as endServerSession,
+	cancelTurn as cancelServerTurn,
 	startSession,
 } from "@/features/session/services/api.session";
 
@@ -19,6 +20,8 @@ const mapBackendMood = (backendMood?: string | null): Mood => {
 	if (backendMood === "anxious" || backendMood === "angry") return "anxious";
 	return "warm";
 };
+
+const SESSION_STORAGE_KEY = "marmalade:sessionId";
 
 type ElevenLabsStatus = "connected" | "connecting" | "disconnected";
 type ElevenLabsMode = "speaking" | "listening" | "unknown";
@@ -44,29 +47,61 @@ type UseElevenlabsSessionReturn = {
 	sendTyping: () => void;
 };
 
-function extractMessageText(message: any): { text: string; isDelta: boolean } {
+function extractMessageText(message: any): {
+	text: string;
+	isDelta: boolean;
+	id?: string | null;
+} {
 	if (!message || typeof message !== "object")
-		return { text: "", isDelta: false };
+		return { text: "", isDelta: false, id: null };
 
-	const text = message.text || message.message || message.content || "";
-	const isDelta = message.type === "text_delta" || !!message.delta;
+	const type = message.type ?? message.event ?? null;
+	const delta = message.delta ?? null;
+	const textFromFields =
+		message.text || message.message || message.content || "";
+	const msgId =
+		message.id ?? message.messageId ?? delta?.id ?? delta?.messageId ?? null;
 
-	if (text) return { text, isDelta };
-
-	if (message.delta?.text || message.delta?.content) {
-		return {
-			text: message.delta.text || message.delta.content,
-			isDelta: true,
-		};
+	if (type === "text_delta" || delta) {
+		const t = delta?.text || delta?.content || textFromFields || "";
+		return { text: t, isDelta: true, id: msgId };
 	}
 
-	return { text: "", isDelta: false };
+	if (type === "transcript" || type === "final" || textFromFields) {
+		return { text: String(textFromFields), isDelta: false, id: msgId };
+	}
+
+	return { text: "", isDelta: false, id: msgId };
 }
 
 export function useElevenlabsSession(
 	options: UseElevenlabsSessionOptions = {}
 ): UseElevenlabsSessionReturn {
 	const [micMuted, setMicMuted] = useState(false);
+	const { autoStart = true } = options;
+	const { user } = useAuth();
+	const userId = useMemo(
+		() => (user as any)?.user?.id ?? (user as any)?.userId ?? undefined,
+		[user]
+	);
+
+	const [mode, setMode] = useState<ElevenLabsMode>("unknown");
+	const [phase, setPhase] = useState<Phase>("idle");
+	const [lastText, setLastText] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [internalSessionId, setInternalSessionId] = useState<string | null>(
+		null
+	);
+	const [sessionMood, setSessionMood] = useState<Mood>("calm");
+
+	const textAccumulator = useRef("");
+	const lastMessageIdRef = useRef<string | null>(null);
+	const internalSessionIdRef = useRef<string | null>(null);
+	const lastModeRef = useRef<ElevenLabsMode>("unknown");
+	const startingRef = useRef<Promise<void> | null>(null);
+	const endingRef = useRef<Promise<void> | null>(null);
+	const esRef = useRef<EventSource | null>(null);
+	const hasAutoStarted = useRef(false);
 
 	const conversation = useConversation({
 		micMuted,
@@ -76,24 +111,51 @@ export function useElevenlabsSession(
 			);
 		},
 		onMessage: (m) => {
-			const { text, isDelta } = extractMessageText(m);
+			const { text, isDelta, id } = extractMessageText(m);
 			if (!text) return;
 
+			if (id && lastMessageIdRef.current !== id) {
+				textAccumulator.current = "";
+				lastMessageIdRef.current = id;
+			}
+
 			if (isDelta) {
-				setLastText((prev) => prev + text);
+				textAccumulator.current = textAccumulator.current + text;
+				setLastText(textAccumulator.current);
 			} else {
+				if (textAccumulator.current.length > text.length) {
+					setLastText(textAccumulator.current);
+					return;
+				}
+				textAccumulator.current = text;
 				setLastText(text);
 			}
 		},
 		onModeChange: (payload: any) => {
 			const nextMode = typeof payload === "string" ? payload : payload?.mode;
-
 			if (nextMode === "speaking" || nextMode === "listening") {
+				const prevMode = lastModeRef.current;
+				lastModeRef.current = nextMode as ElevenLabsMode;
+
+				if (nextMode === "listening" && prevMode === "speaking") {
+					const sid = internalSessionIdRef.current;
+					if (sid) {
+						void cancelServerTurn(sid).catch(() => {
+							// best-effort
+						});
+					}
+				}
+
 				setMode(nextMode as ElevenLabsMode);
-				if (nextMode === "speaking") setLastText("");
+				if (nextMode === "speaking") {
+					textAccumulator.current = "";
+					lastMessageIdRef.current = null;
+					setLastText("");
+				}
 				return;
 			}
 			setMode("unknown");
+			lastModeRef.current = "unknown";
 		},
 		onDisconnect: () => {
 			setMode("unknown");
@@ -106,25 +168,23 @@ export function useElevenlabsSession(
 		status === "connected" || status === "connecting" ? status : "disconnected";
 	const isSpeaking = Boolean((conversation as any)?.isSpeaking);
 
-	const { autoStart = true } = options;
-	const { user } = useAuth();
-	const userId = (user as any)?.user?.id ?? (user as any)?.userId ?? undefined;
-
-	const [mode, setMode] = useState<ElevenLabsMode>("unknown");
-	const [phase, setPhase] = useState<Phase>("idle");
-	const [lastText, setLastText] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const [internalSessionId, setInternalSessionId] = useState<string | null>(
-		null
-	);
-	const [sessionMood, setSessionMood] = useState<Mood>("calm");
-
-	const internalSessionIdRef = useRef<string | null>(null);
-	const startingRef = useRef<Promise<void> | null>(null);
-	const endingRef = useRef<Promise<void> | null>(null);
-	const esRef = useRef<EventSource | null>(null);
 	const statusRef = useRef(safeStatus);
-	const hasAutoStarted = useRef(false);
+
+	useEffect(() => {
+		statusRef.current = safeStatus;
+	}, [safeStatus]);
+
+	useEffect(() => {
+		try {
+			const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+			if (stored) {
+				setInternalSessionId(stored);
+				internalSessionIdRef.current = stored;
+			}
+		} catch (e) {
+			console.warn("marmalade:session - failed to read storage", e);
+		}
+	}, []);
 
 	const orbState: OrbState = useMemo(() => {
 		if (safeStatus === "connecting") return "processing";
@@ -136,10 +196,9 @@ export function useElevenlabsSession(
 	const start = useCallback(async () => {
 		if (statusRef.current === "connected" || statusRef.current === "connecting")
 			return;
-
 		if (startingRef.current) return startingRef.current;
-		setError(null);
 
+		setError(null);
 		const agentId = env.elevenLabsAgentId?.trim();
 		if (!agentId) {
 			setError("Missing ElevenLabs agent id");
@@ -150,19 +209,58 @@ export function useElevenlabsSession(
 			try {
 				await navigator.mediaDevices.getUserMedia({ audio: true });
 
-				const sid = await startSession();
-				setInternalSessionId(sid);
+				let sid =
+					localStorage.getItem(SESSION_STORAGE_KEY) ||
+					internalSessionIdRef.current;
+
+				if (!sid) {
+					sid = await startSession();
+					setInternalSessionId(sid);
+					internalSessionIdRef.current = sid;
+					localStorage.setItem(SESSION_STORAGE_KEY, sid);
+				}
 
 				await (conversation as any).startSession({
 					agentId,
+					dynamicVariables: {
+						system_user_id: userId ? String(userId) : "anonymous",
+						system_session_id: sid,
+					},
 					connectionType: "webrtc",
-					...(userId ? { userId: String(userId) } : {}),
-					sessionId: sid,
 				});
-			} catch (e) {
-				setError(
-					e instanceof Error ? e.message : "Failed to start conversation"
-				);
+			} catch (_e) {
+				try {
+					const sid =
+						localStorage.getItem(SESSION_STORAGE_KEY) ||
+						internalSessionIdRef.current;
+
+					const dynamicVariables = {
+						system_user_id: userId ? String(userId) : "anonymous",
+						system_session_id: sid,
+					};
+					if (!sid) {
+						const fresh = await startSession();
+						setInternalSessionId(fresh);
+						internalSessionIdRef.current = fresh;
+						localStorage.setItem(SESSION_STORAGE_KEY, fresh);
+						await (conversation as any).startSession({
+							agentId,
+							connectionType: "webrtc",
+							dynamicVariables,
+						});
+						return;
+					}
+
+					await (conversation as any).startSession({
+						agentId,
+						connectionType: "webrtc",
+						dynamicVariables,
+					});
+				} catch (retryErr) {
+					setError(
+						retryErr instanceof Error ? retryErr.message : "Failed to start"
+					);
+				}
 			}
 		})();
 
@@ -176,23 +274,25 @@ export function useElevenlabsSession(
 	const end = useCallback(async () => {
 		if (endingRef.current) return endingRef.current;
 		endingRef.current = (async () => {
+			const sidToKill = internalSessionIdRef.current;
 			try {
 				esRef.current?.close();
 				esRef.current = null;
 				setPhase("idle");
-
 				await (conversation as any).endSession();
 			} catch (e) {
-				setError(e instanceof Error ? e.message : "Failed to end conversation");
+				setError(e instanceof Error ? e.message : "Failed to end");
 			}
 
-			if (internalSessionId) {
+			if (sidToKill) {
 				try {
-					await endServerSession(internalSessionId);
+					await endServerSession(sidToKill);
 				} catch {
 					/* ignore */
 				}
 				setInternalSessionId(null);
+				internalSessionIdRef.current = null;
+				localStorage.removeItem(SESSION_STORAGE_KEY);
 			}
 		})();
 
@@ -201,11 +301,17 @@ export function useElevenlabsSession(
 		} finally {
 			endingRef.current = null;
 		}
-	}, [conversation, internalSessionId]);
+	}, [conversation]);
 
 	const sendText = useCallback(
 		(text: string) => {
 			if (!text.trim()) return;
+			const sid = internalSessionIdRef.current;
+
+			if (sid) {
+				void cancelServerTurn(sid).catch(() => {});
+			}
+
 			(conversation as any).sendUserMessage(text.trim());
 		},
 		[conversation]
@@ -223,20 +329,13 @@ export function useElevenlabsSession(
 	}, [autoStart, start]);
 
 	useEffect(() => {
-		statusRef.current = safeStatus;
-	}, [safeStatus]);
-
-	useEffect(() => {
-		internalSessionIdRef.current = internalSessionId;
-	}, [internalSessionId]);
-
-	useEffect(() => {
 		if (!internalSessionId) return;
 
 		const url = `${env.baseURL}/messages/events?sessionId=${internalSessionId}`;
+		let es: EventSource | null = null;
 
 		try {
-			const es = new EventSource(url, { withCredentials: true });
+			es = new EventSource(url, { withCredentials: true });
 			esRef.current = es;
 
 			es.addEventListener("phase", (e: MessageEvent) => {
@@ -248,15 +347,15 @@ export function useElevenlabsSession(
 			});
 
 			es.onerror = () => {
-				console.warn("SSE link failed. Check BETTER_AUTH_SECRET.");
+				console.warn("SSE link failed. Possible connection timeout.");
 			};
 		} catch (err) {
 			console.error("SSE Setup Error", err);
 		}
 
 		return () => {
-			esRef.current?.close();
-			esRef.current = null;
+			es?.close();
+			if (esRef.current === es) esRef.current = null;
 		};
 	}, [internalSessionId]);
 
