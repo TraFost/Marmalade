@@ -249,7 +249,10 @@ export class CounselorBrainClient {
 		const recent = input.conversationWindow.slice(-4);
 
 		const memoryContext = (input.relevantDocs ?? [])
-			.map((d, i) => `[Shared Memory ${i + 1}]: ${d.content.slice(0, 300)}`)
+			.map(
+				(d, i) =>
+					`[REQUIRED INTERVENTION DATA]: Use this logic if applicable: ${d.content}`
+			)
 			.join("\n");
 
 		const nameContext = (input.preferences as any)?.name
@@ -290,10 +293,11 @@ export class CounselorBrainClient {
 		# RECENT CONVERSATION
 		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
 			
-		# TTS PACING
-		- Write in complete sentences.
-		- Use commas for rhythm.
-		- Avoid fragments and dramatic pauses.
+		# TTS PACING (VOICE-FIRST PROTOCOL)
+		- Use commas liberally to create natural "breath" rhythms.
+		- Avoid excessive periods; a comma is often better to keep the vocal pitch from dropping mid-thought.
+		- Do not use dramatic "..." or "—" as they can confuse the TTS timing.
+		- Write for the ear, not the eye. Use flow over formal sentence structure.
 			
 		Continue the response now:
 		`.trim();
