@@ -169,7 +169,7 @@ export class FirstResponseClient {
 
 		const modeLine = isStandalone
 			? "The user's message is a greeting or small-talk. Reply lightly and stop."
-			: "Acknowledge the message briefly and stop.";
+			: "Reflect the felt meaning of the message in one line and stop.";
 
 		return [
 			"You are Marmalade, the assistant itself.",
@@ -181,8 +181,8 @@ export class FirstResponseClient {
 			"",
 			"OUTPUT RULES:",
 			isStandalone
-				? "- LENGTH: 6-7 words maximum."
-				: "- LENGTH: 10 words maximum.",
+				? "- LENGTH: 4-6 words maximum."
+				: "- LENGTH: 13-16 words maximum.",
 			"- Output ONE line only.",
 			"- No therapy tone.",
 			"- No pep talk.",
@@ -191,6 +191,7 @@ export class FirstResponseClient {
 			"- No questions.",
 			"- No meta talk (no AI, no system, no layers).",
 			isStandalone ? "- You MAY greet back." : "- Do NOT greet back.",
+			"- You may reflect an explicit contrast or feeling stated by the user, without analysis.",
 
 			"",
 			`USER: ${name}`,

@@ -371,6 +371,7 @@ const buildSystemInstruction = (c: {
 	- No templates, generic empathy, or polished therapy phrases.
 	- **Calibration**: If the user input is short/neutral (e.g. "hello", "good morning", "not much"), stay light. Do NOT psychoanalyze a greeting.
 	- **State Delta**: Reference the detected state delta ONLY when it is meaningful/clear. If the delta is unclear / missing / "no_current_read", do not invent psychological shifts.
+	- **Contrast Resolution**: You may explicitly resolve a contrast that the user themselves stated (e.g., “productive but hollow”), without repeating their wording verbatim.
 	- Somatic/phenomenology questions ONLY if the user expressed distress/emotion in this turn.
 	- Grounding only if groundingEligible true.
 	- Do NOT add a somatic question on neutral/small-talk turns.
