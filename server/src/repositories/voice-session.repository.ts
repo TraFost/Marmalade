@@ -9,8 +9,15 @@ import { and, eq, lt, sql } from "drizzle-orm";
 type DBClient = typeof db;
 
 export class VoiceSessionRepository {
-	async create(userId: string, client: DBClient = db): Promise<VoiceSession> {
-		const payload: NewVoiceSession = { userId };
+	async create(
+		userId: string,
+		client: DBClient = db,
+		externalId?: string | null
+	): Promise<VoiceSession> {
+		const payload: NewVoiceSession = {
+			userId,
+			...(externalId ? { externalId } : {}),
+		};
 		const [record] = await client
 			.insert(voiceSessions)
 			.values(payload)
@@ -43,6 +50,24 @@ export class VoiceSessionRepository {
 			.set(updates)
 			.where(eq(voiceSessions.id, id))
 			.returning();
+		return record ?? null;
+	}
+
+	async findByExternalId(
+		userId: string,
+		externalId: string,
+		client: DBClient = db
+	): Promise<VoiceSession | null> {
+		const [record] = await client
+			.select()
+			.from(voiceSessions)
+			.where(
+				and(
+					eq(voiceSessions.userId, userId),
+					eq(voiceSessions.externalId, externalId)
+				)
+			)
+			.limit(1);
 		return record ?? null;
 	}
 

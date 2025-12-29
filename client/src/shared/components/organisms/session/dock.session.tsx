@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
 	DotsThreeIcon,
 	MicrophoneIcon,
@@ -45,14 +45,27 @@ export function SessionDock({
 		setShowMenu((prev) => !prev);
 	};
 
+	const prevManualMuteRef = useRef<boolean | null>(null);
+
 	const toggleMode = () => {
-		setIsTextMode((prev) => {
-			const next = !prev;
-			onMicMutedChange?.(next);
-			return next;
-		});
+		const next = !isTextMode;
+		setIsTextMode(next);
 		setShowMenu(false);
 	};
+
+	useEffect(() => {
+		if (typeof onMicMutedChange !== "function") return;
+
+		if (isTextMode) {
+			prevManualMuteRef.current = micMuted ?? false;
+			onMicMutedChange(true);
+		} else {
+			if (prevManualMuteRef.current !== null) {
+				onMicMutedChange(prevManualMuteRef.current);
+				prevManualMuteRef.current = null;
+			}
+		}
+	}, [isTextMode, micMuted, onMicMutedChange]);
 
 	useClickOutside(menuRef, () => setShowMenu(false));
 

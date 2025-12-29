@@ -4,12 +4,11 @@ import { SessionService } from "../services/session.service";
 import { ConversationService } from "../services/conversation.service";
 import { env } from "../configs/env.config";
 import { db } from "../libs/db/db.lib";
+import { logger } from "../libs/logger";
 
 const messageRepo = new MessageRepository();
 const sessionService = new SessionService();
 const conversationService = new ConversationService();
-
-const externalSessionToInternal = new Map<string, string>();
 
 type OpenAIChatMessage = {
 	role: string;
@@ -92,14 +91,8 @@ async function handleChatCompletions(c: any) {
 	const incomingSessionId = (body.session_id ?? sessionIdFromHeader)
 		?.toString()
 		.trim();
-	let sessionId: string | undefined;
 
-	if (incomingSessionId && isUuid(incomingSessionId)) {
-		sessionId = incomingSessionId;
-	} else if (incomingSessionId) {
-		const key = `${userId}:${incomingSessionId}`;
-		sessionId = externalSessionToInternal.get(key);
-	}
+	let sessionId: string | undefined = incomingSessionId || undefined;
 
 	const userMessages = Array.isArray(body.messages) ? body.messages : [];
 	const lastUser = [...userMessages].reverse().find((m) => m?.role === "user");
@@ -115,13 +108,10 @@ async function handleChatCompletions(c: any) {
 	const prepareTurn = async () => {
 		const session = await sessionService.ensureSession(userId, sessionId);
 
-		if (incomingSessionId && !isUuid(incomingSessionId)) {
-			const key = `${userId}:${incomingSessionId}`;
-			if (!externalSessionToInternal.has(key)) {
-				externalSessionToInternal.set(key, session.id);
-			}
-		}
-
+		logger.info(
+			{ userId, incomingSessionId, resolvedSessionId: session.id },
+			"prepareTurn: session resolved"
+		);
 		await db.transaction(async (tx) => {
 			await messageRepo.create(
 				{
@@ -144,11 +134,16 @@ async function handleChatCompletions(c: any) {
 	if (!wantsStream) {
 		try {
 			const session = await prepareTurn();
+			const turnController = conversationService.beginTurn(
+				session.id,
+				"new completion started"
+			);
 			let fullText = "";
 			for await (const part of conversationService.handleUserTurnModelStream(
 				userId,
 				session.id,
-				transcript
+				transcript,
+				{ abortController: turnController }
 			)) {
 				if (part.text !== "...") {
 					fullText += part.text;
@@ -178,6 +173,8 @@ async function handleChatCompletions(c: any) {
 	}
 
 	const encoder = new TextEncoder();
+	let turnController: AbortController | null = null;
+	let resolvedSessionId: string | null = null;
 	const stream = new ReadableStream({
 		async start(controller) {
 			const send = (obj: unknown) =>
@@ -185,6 +182,11 @@ async function handleChatCompletions(c: any) {
 
 			try {
 				const session = await prepareTurn();
+				resolvedSessionId = session.id;
+				turnController = conversationService.beginTurn(
+					session.id,
+					"new completion started"
+				);
 
 				send({
 					id,
@@ -203,7 +205,8 @@ async function handleChatCompletions(c: any) {
 				for await (const chunk of conversationService.handleUserTurnModelStream(
 					userId,
 					session.id,
-					transcript
+					transcript,
+					{ abortController: turnController }
 				)) {
 					if (chunk.text) {
 						send({
@@ -239,6 +242,28 @@ async function handleChatCompletions(c: any) {
 				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 			} catch (e: any) {
 				console.error("Streaming turn failed", e);
+				if (e?.code === "TURN_ABORTED") {
+					// client disconnected or new turn started; end stream cleanly
+					try {
+						send({
+							id,
+							object: "chat.completion.chunk",
+							created,
+							model,
+							choices: [
+								{
+									index: 0,
+									delta: {},
+									finish_reason: "stop",
+								},
+							],
+						});
+						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+					} catch {
+						// ignore
+					}
+					return;
+				}
 				send({
 					id,
 					object: "chat.completion.chunk",
@@ -256,6 +281,19 @@ async function handleChatCompletions(c: any) {
 				});
 			} finally {
 				controller.close();
+			}
+		},
+		cancel() {
+			if (turnController && !turnController.signal.aborted) {
+				try {
+					turnController.abort(new Error("client disconnected"));
+				} catch {
+					// ignore
+				}
+			}
+			// Best-effort: if the controller we aborted is still the active one, clear it
+			if (resolvedSessionId && turnController) {
+				conversationService.endTurn(resolvedSessionId, turnController);
 			}
 		},
 	});

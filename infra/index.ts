@@ -178,6 +178,8 @@ const service = new gcp.cloudrunv2.Service(
 				minInstanceCount: 1,
 				maxInstanceCount: 10,
 			},
+			timeout: "600s",
+			maxInstanceRequestConcurrency: 80,
 			containers: [
 				{
 					// Use the immutable digest so updates roll a new revision even if the tag stays the same.

@@ -369,6 +369,18 @@ export function OnboardingPage() {
 		if (isLastStep) {
 			setIsStartingSession(true);
 			try {
+				let existingSessionId: string | null = null;
+				try {
+					existingSessionId = localStorage.getItem("marmalade:sessionId");
+				} catch {
+					// ignore
+				}
+
+				if (existingSessionId) {
+					navigate(`/session/${existingSessionId}`);
+					return;
+				}
+
 				const sessionId = await startSessionMutation.mutateAsync();
 				if (sessionId) {
 					navigate(`/session/${sessionId}`);
