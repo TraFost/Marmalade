@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 
 import { SessionTranscripts } from "@/shared/components/organisms/session/transcript.session";
@@ -25,6 +26,7 @@ const phaseMessages = (phase: Phase): string | undefined => {
 };
 
 export function SessionPage() {
+	const navigate = useNavigate();
 	const {
 		orbState,
 		phase,
@@ -34,9 +36,38 @@ export function SessionPage() {
 		lastText,
 		status,
 		end,
+		internalSessionId,
 		sendText,
 		sendTyping,
 	} = useElevenlabsSession({ autoStart: true });
+
+	const handleEndSession = useCallback(() => {
+		const fallbackSessionId = internalSessionId;
+		void (async () => {
+			const endedAt = new Date().toISOString();
+			let res:
+				| {
+						sessionId: string;
+						endedAt?: string;
+				  }
+				| undefined;
+			try {
+				res = (await end()) as any;
+			} catch {
+				res = undefined;
+			}
+
+			const sid = res?.sessionId ?? fallbackSessionId;
+			if (sid) {
+				navigate(`/session/${sid}/result`, {
+					state: {
+						sessionId: sid,
+						endedAt: res?.endedAt ?? endedAt,
+					},
+				});
+			}
+		})();
+	}, [end, internalSessionId, navigate]);
 
 	const showDots = useMemo(() => {
 		const hasText = Boolean(lastText.trim().length);
@@ -86,7 +117,7 @@ export function SessionPage() {
 					<SessionDock
 						micMuted={micMuted}
 						onMicMutedChange={setMicMuted}
-						onEndSession={() => void end()}
+						onEndSession={handleEndSession}
 						onSendText={sendText}
 						onUserTyping={sendTyping}
 					/>

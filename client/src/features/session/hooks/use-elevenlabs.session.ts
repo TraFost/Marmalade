@@ -42,7 +42,12 @@ type UseElevenlabsSessionReturn = {
 	error: string | null;
 	internalSessionId: string | null;
 	start: () => Promise<void>;
-	end: () => Promise<void>;
+	end: () => Promise<{
+		sessionId: string;
+		summaryDocId?: string;
+		summary?: string;
+		endedAt: string;
+	} | void>;
 	sendText: (text: string) => void;
 	sendTyping: () => void;
 };
@@ -99,7 +104,9 @@ export function useElevenlabsSession(
 	const internalSessionIdRef = useRef<string | null>(null);
 	const lastModeRef = useRef<ElevenLabsMode>("unknown");
 	const startingRef = useRef<Promise<void> | null>(null);
-	const endingRef = useRef<Promise<void> | null>(null);
+	const endingRef = useRef<ReturnType<
+		UseElevenlabsSessionReturn["end"]
+	> | null>(null);
 	const esRef = useRef<EventSource | null>(null);
 	const hasAutoStarted = useRef(false);
 
@@ -118,6 +125,9 @@ export function useElevenlabsSession(
 				textAccumulator.current = "";
 				lastMessageIdRef.current = id;
 			}
+
+			console.log(text, "<<text");
+			console.log(isDelta, id, "<<< additional information");
 
 			if (isDelta) {
 				textAccumulator.current = textAccumulator.current + text;
@@ -275,6 +285,10 @@ export function useElevenlabsSession(
 		if (endingRef.current) return endingRef.current;
 		endingRef.current = (async () => {
 			const sidToKill = internalSessionIdRef.current;
+			const endedAt = new Date().toISOString();
+			let endResult: {
+				sessionId: string;
+			} | null = null;
 			try {
 				esRef.current?.close();
 				esRef.current = null;
@@ -286,7 +300,7 @@ export function useElevenlabsSession(
 
 			if (sidToKill) {
 				try {
-					await endServerSession(sidToKill);
+					endResult = await endServerSession(sidToKill);
 				} catch {
 					/* ignore */
 				}
@@ -294,6 +308,13 @@ export function useElevenlabsSession(
 				internalSessionIdRef.current = null;
 				localStorage.removeItem(SESSION_STORAGE_KEY);
 			}
+
+			return endResult
+				? {
+						...endResult,
+						endedAt,
+				  }
+				: undefined;
 		})();
 
 		try {

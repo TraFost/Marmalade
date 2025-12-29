@@ -210,20 +210,42 @@ export class SessionReportClient {
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(raw);
-		} catch (err) {
-			console.warn("[AI][Report] Failed to parse JSON:", {
-				err: (err as Error).message,
-				raw,
-			});
-			throw new AppError(
-				"Report response was not valid JSON",
-				400,
-				"INVALID_REPORT_RESPONSE_JSON"
-			);
-		}
-
-		try {
+			try {
+				parsed = JSON.parse(raw);
+			} catch (err) {
+				const firstBrace = raw.indexOf("{");
+				const lastBrace = raw.lastIndexOf("}");
+				if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+					const candidate = raw.slice(firstBrace, lastBrace + 1);
+					try {
+						parsed = JSON.parse(candidate);
+					} catch (err2) {
+						console.warn(
+							"[AI][Report] Failed to parse JSON after sanitization:",
+							{
+								err: (err as Error).message,
+								err2: (err2 as Error).message,
+								rawSnippet: candidate.slice(0, 2000),
+							}
+						);
+						throw new AppError(
+							"Report response was not valid JSON",
+							400,
+							"INVALID_REPORT_RESPONSE_JSON"
+						);
+					}
+				} else {
+					console.warn("[AI][Report] Failed to parse JSON:", {
+						err: (err as Error).message,
+						rawSnippet: raw.slice(0, 2000),
+					});
+					throw new AppError(
+						"Report response was not valid JSON",
+						400,
+						"INVALID_REPORT_RESPONSE_JSON"
+					);
+				}
+			}
 			return reportSchema.parse(parsed);
 		} catch (err) {
 			if (err instanceof ZodError) {
