@@ -4,6 +4,7 @@ import { ConversationStateRepository } from "../repositories/conversation-state.
 import { MessageRepository } from "../repositories/message.repository";
 import { ConversationService } from "./conversation.service";
 import { db } from "../libs/db/db.lib";
+import { logger } from "../libs/logger";
 import { ScreeningRepository } from "../repositories/screening.repository";
 import type { StateMappingSignals, UserStateGraph } from "shared";
 
@@ -145,13 +146,58 @@ export class SessionService {
 
 	async ensureSession(userId: string, sessionId?: string) {
 		if (!sessionId) {
+			logger.info(
+				{ userId, sessionId: null },
+				"ensureSession: no sessionId provided - creating new session"
+			);
 			return this.startSession(userId);
 		}
-		const session = await this.sessions.findById(sessionId);
-		if (!session || session.userId !== userId) {
-			throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+
+		const isUuid = (value: string) =>
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+				value
+			);
+
+		if (isUuid(sessionId)) {
+			const session = await this.sessions.findById(sessionId);
+			if (!session || session.userId !== userId) {
+				logger.info(
+					{ userId, sessionId, isUuid: true, resolved: null },
+					"ensureSession: UUID provided but not found or mismatched user"
+				);
+				throw new AppError("Session not found", 404, "SESSION_NOT_FOUND");
+			}
+			logger.info(
+				{ userId, sessionId, isUuid: true, resolved: session.id },
+				"ensureSession: resolved by UUID"
+			);
+			return session;
 		}
-		return session;
+
+		// Not a UUID - treat as external id
+		const existing = await this.sessions.findByExternalId(userId, sessionId);
+		if (existing) {
+			logger.info(
+				{
+					userId,
+					incomingExternalId: sessionId,
+					isUuid: false,
+					resolved: existing.id,
+				},
+				"ensureSession: resolved external id to existing session"
+			);
+			return existing;
+		}
+
+		// Not found - create a new session and persist external id
+		logger.info(
+			{ userId, incomingExternalId: sessionId, isUuid: false, resolved: null },
+			"ensureSession: external id not found - creating new session with external id"
+		);
+		return db.transaction(async (tx) => {
+			const s = await this.sessions.create(userId, tx, sessionId);
+			return s;
+		});
 	}
 
 	async endSession(userId: string, sessionId: string) {
