@@ -192,7 +192,8 @@ export class FirstResponseClient {
 			"- No meta talk (no AI, no system, no layers).",
 			isStandalone ? "- You MAY greet back." : "- Do NOT greet back.",
 			"- You may reflect an explicit contrast or feeling stated by the user, without analysis.",
-
+			'- Avoid impersonal or generalized phrasing (e.g., "can feel", "often", "many people").',
+			"- Do not infer causes or reasons the user did not explicitly state.",
 			"",
 			`USER: ${name}`,
 			`RISK: ${input.riskLevel}`,
