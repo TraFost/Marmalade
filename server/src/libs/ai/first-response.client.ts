@@ -181,8 +181,8 @@ export class FirstResponseClient {
 			"",
 			"OUTPUT RULES:",
 			isStandalone
-				? "- LENGTH: 3–5 words maximum."
-				: "- LENGTH: 5–7 words maximum.",
+				? "- LENGTH: 6-7 words maximum."
+				: "- LENGTH: 10 words maximum.",
 			"- Output ONE line only.",
 			"- No therapy tone.",
 			"- No pep talk.",
