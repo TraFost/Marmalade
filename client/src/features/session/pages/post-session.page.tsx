@@ -79,12 +79,13 @@ export function PostSessionPage() {
 						</div>
 
 						<h1 className="text-2xl font-serif font-medium tracking-tight text-card-foreground mb-2">
-							Session Concluded
+							Session Summary
 						</h1>
 
 						<p className="text-sm text-muted-foreground leading-relaxed">
-							The interactive session has been terminated. All input data has
-							been processed and is available for export.
+							Your session has ended. Our conversation is saved securely. You
+							can download a comprehensive report summarizing key insights and
+							recommendations.
 						</p>
 					</div>
 
