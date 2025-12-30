@@ -5,10 +5,12 @@ export function CallToActionSection() {
 		<section className="px-6 py-32">
 			<div className="mx-auto max-w-4xl text-center">
 				<h2 className="mb-6 text-5xl font-serif text-foreground md:text-6xl">
-					Start your first conversation.
+					Start your first conversation: instant streaming, private, and
+					reliable.
 				</h2>
 				<p className="mb-10 text-lg text-foreground/70">
-					Let Marmalade walk with you — one gentle step at a time.
+					Begin a session now, with instant streaming voice, private storage,
+					and reliable delivery.
 				</p>
 				<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
 					<Button
