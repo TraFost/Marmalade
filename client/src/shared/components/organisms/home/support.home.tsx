@@ -1,6 +1,9 @@
 export function SupportSection() {
 	return (
-		<section id="support" className="border-y border-border/40 bg-card px-6 py-20">
+		<section
+			id="support"
+			className="border-y border-border/40 bg-card px-6 py-20"
+		>
 			<div className="mx-auto max-w-2xl text-center">
 				<h2 className="mb-8 text-3xl font-medium tracking-tight text-foreground md:text-4xl">
 					You don’t have to carry everything alone.
