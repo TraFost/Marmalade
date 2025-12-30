@@ -6,15 +6,17 @@
 ```mermaid
 flowchart LR
   %% CLIENT
-  subgraph CLIENT ["Client (Browser / App)"]
+  subgraph CLIENT ["Client (Browser)"]
     direction TB
     Onboard[Onboarding UI<br/>(5 steps + V2 fields)]
-    ChatUI[Chat UI / Voice Input]
     Onboard -->|POST /api/state-mapping/upsert| API_Upsert
     Onboard -->|GET /api/state-mapping/graph| API_Graph
-    ChatUI -->|POST /v1/chat/completions| Hooks
-    ChatUI -->|HTTP/WS message (optional)| API_Conversation
     Onboard -. hydrate (pristine only) .-> Onboard
+    ConversationUI[Conversation UI<br/>(hooks + SSE)]
+    ConversationUI -->|POST /v1/chat/completions| Hooks
+    ConversationUI -->|GET /api/messages/events| SSE
+    PostSession[Post-Session Report UI]
+    PostSession -->|POST /api/reports/session| Reports
   end
 
   %% SERVER ROUTES
