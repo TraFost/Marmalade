@@ -6,7 +6,7 @@ const intro3 = new URL(
 
 export function TimelineIllustration() {
 	return (
-		<div className="relative mx-auto flex aspect-square w-full max-w-[280px] items-center justify-center top-20">
+		<div className="relative mx-auto flex aspect-square w-full max-w-[280px] items-center justify-center md:top-20">
 			<DotLottiePlayer
 				src={intro3}
 				autoplay

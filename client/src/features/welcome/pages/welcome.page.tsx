@@ -229,7 +229,7 @@ function ProgressDots({ currentStep, goToStep }: ProgressDotsProps) {
 						"h-2 rounded-full px-0 transition-[width,background-color] duration-300 ease-out",
 						index === currentStep
 							? "bg-primary"
-							: "bg-secondary hover:bg-primary/50"
+							: "bg-black/50 hover:bg-primary/50"
 					)}
 					style={{
 						width:
