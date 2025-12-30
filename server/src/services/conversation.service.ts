@@ -1020,8 +1020,6 @@ export class ConversationService {
 		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
 
 		try {
-			yield { text: "I hear that", voiceMode: "comfort" };
-
 			const [state, recent, relevant] = await Promise.all([
 				statePromise,
 				recentMessagesPromise,
@@ -1043,15 +1041,13 @@ export class ConversationService {
 				graph: ensureGraph((state as any)?.preferences?.userStateGraph),
 			});
 
-			const miniResults = await miniBrainPromise;
-
 			const stream = this.counselorBrain.generateReplyTextStream({
 				conversationWindow: recent
 					.map((m) => ({ role: m.role, content: m.content }))
 					.reverse(),
 				systemInstruction: buildSystemInstruction({
-					mood: miniResults.mood || (state as any)?.mood || "mixed",
-					riskLevel: miniResults.riskLevel ?? 0,
+					mood: (state as any)?.mood || "mixed",
+					riskLevel: (state as any)?.riskLevel ?? 0,
 					mode: "support",
 					stateDelta: coordinated.delta,
 					languagePlan: coordinated.languagePlan,
@@ -1064,10 +1060,10 @@ export class ConversationService {
 					stress: (state as any)?.baselineStress ?? null,
 				},
 				summary: (state as any)?.summary ?? null,
-				riskLevel: miniResults.riskLevel ?? 0,
-				themes: miniResults.themes ?? [],
+				riskLevel: (state as any)?.riskLevel ?? 0,
+				themes: (state as any)?.themes ?? [],
 				preferences: (state as any)?.preferences ?? {},
-				safetyMode: this.getSafetyMode(miniResults.riskLevel ?? 0),
+				safetyMode: this.getSafetyMode((state as any)?.riskLevel ?? 0),
 			});
 
 			let proText = "";
@@ -1081,12 +1077,14 @@ export class ConversationService {
 			}
 
 			if (proText.trim() && !signal.aborted) {
+				const finalMiniResults = await miniBrainPromise;
+
 				this.saveTurnAsync(
 					userId,
 					sessionId,
 					userMessage,
 					proText.trim(),
-					miniResults,
+					finalMiniResults,
 					"comfort",
 					{ preferences: { userStateGraph: coordinated.nextGraph } },
 					relevant
