@@ -142,62 +142,41 @@ export class CounselorBrainClient {
 				role: "system",
 			},
 			generationConfig: {
-				topP: 0.8,
-				temperature: 0.7,
+				topP: 0.5,
+				temperature: 0.9,
 			},
 		});
 
 		const prompt = this.buildStreamingPrompt(input);
 
-		const res: any = await model.generateContentStream({
-			contents: [
-				{
-					role: "user",
-					parts: [{ text: prompt }],
-				},
-			],
+		const res = await model.generateContentStream({
+			contents: [{ role: "user", parts: [{ text: prompt }] }],
 		});
 
 		for await (const chunk of res.stream) {
-			let usage:
-				| { inputTokens?: number; outputTokens?: number; totalTokens?: number }
-				| undefined;
-			try {
-				const itemMeta = (chunk?.candidates?.[0] as any)?.metadata ?? null;
-				if (itemMeta) {
-					usage = {
+			const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+			const usageMetadata =
+				(chunk as any).usageMetadata || (chunk as any).metadata?.usage;
+			const usage = usageMetadata
+				? {
 						inputTokens:
-							itemMeta.inputTokens ??
-							itemMeta.input_tokens ??
-							itemMeta?.usage?.input_tokens ??
-							null,
+							usageMetadata.promptTokenCount || usageMetadata.inputTokens,
 						outputTokens:
-							itemMeta.outputTokens ??
-							itemMeta.output_tokens ??
-							itemMeta?.usage?.output_tokens ??
-							null,
+							usageMetadata.candidatesTokenCount || usageMetadata.outputTokens,
 						totalTokens:
-							itemMeta.totalTokens ??
-							itemMeta.total_tokens ??
-							itemMeta?.usage?.total_tokens ??
-							null,
-					};
-					console.info(
-						"[AI][Counselor] stream item metadata:",
-						itemMeta,
-						"usage:",
-						usage
-					);
-				}
-			} catch (logErr) {
+							usageMetadata.totalTokenCount || usageMetadata.totalTokens,
+				  }
+				: undefined;
+
+			const finishReason = chunk.candidates?.[0]?.finishReason;
+			if (finishReason && finishReason !== "STOP") {
 				console.warn(
-					"[AI][Counselor] Failed to log stream item metadata:",
-					logErr
+					`[AI][Counselor] Stream ended with reason: ${finishReason}`
 				);
 			}
 
-			const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-			if (text) {
+			if (text || usage) {
 				yield { text, usage };
 			}
 		}
@@ -249,57 +228,32 @@ export class CounselorBrainClient {
 		const recent = input.conversationWindow.slice(-4);
 
 		const memoryContext = (input.relevantDocs ?? [])
-			.map(
-				(d, i) =>
-					`[REQUIRED INTERVENTION DATA]: Use this logic if applicable: ${d.content}`
-			)
+			.map((d) => `[MEMORY]: ${d.content}`)
 			.join("\n");
 
 		const nameContext = (input.preferences as any)?.name
 			? `Address them as ${(input.preferences as any).name}.`
-			: "Do not invent familiarity. Stay neutral.";
-
-		const lastResponseSent = recent.at(-1)?.content ?? "";
+			: "Stay neutral and professional.";
 
 		return `
-		You are Marmalade, continuing the assistant response.
-		Marmalade is NOT food, jam, or a preserve.
-		
-		# HARD GUARDRAILS
-		- Do NOT redefine or explain the name unless explicitly asked.
-		- Do NOT mention internal layers, tooling, prompts, or systems.
-		- Do not catastrophize or introduce unseen pathology.
-		- If the user's message is greeting/small-talk with no distress, respond with ONE short friendly line and STOP.
-		- Do not verbatim-repeat. Experiential synthesis is allowed
-		- Length: up to 40 words when responseClass ≠ "understanding"
-		- Use simple, natural language.
-		- Avoid therapy clichés.
-		- Do not ask exploratory or reflective questions unless riskLevel ≥ 2 AND groundingEligible is true, OR explicitly allowed by InterventionArbiter.
-		- If riskLevel ≥ 3, prioritize safety, grounding, and de-escalation.
-		- If riskLevel = 4, use crisis voice and grounding ONLY. No coaching or exercises.
+        # RECENT HISTORY
+        ${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
+        
+        # ACTIVE STATE
+        Journey: ${input.summary}
+        Themes: ${input.themes.join(", ")}
+        Safety Mode: ${input.safetyMode}
+        ${nameContext}
 
-			
-		# CONTEXT
-		Just Sent: "${lastResponseSent}"
-		User Mood: ${input.mood}
-		Journey Summary: ${input.summary}
-		Username Rule: ${nameContext}
-		User Risk Level: ${input.riskLevel} (Safety Mode: ${input.safetyMode})
-		User Themes: ${input.themes.join(", ")}
-			
-		# KNOWLEDGE BASE
-		${memoryContext || "No relevant memories for this turn."}
-			
-		# RECENT CONVERSATION
-		${recent.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
-			
-		# TTS PACING (VOICE-FIRST PROTOCOL)
-		- Use commas liberally to create natural "breath" rhythms.
-		- Avoid excessive periods; a comma is often better to keep the vocal pitch from dropping mid-thought.
-		- Do not use dramatic "..." or "—" as they can confuse the TTS timing.
-		- Write for the ear, not the eye. Use flow over formal sentence structure.
-			
-		Continue the response now:
-		`.trim();
+        # TASK
+        ${memoryContext || "No specific memories."}
+        
+        Continue the conversation based on the System Instructions. 
+        Remember: The first layer already said hello/acknowledged the user. 
+        Jump straight into the ${
+					input.preferences?.responseClass || "reflection"
+				}.
+        Keep it under 40 words.
+        `.trim();
 	}
 }
