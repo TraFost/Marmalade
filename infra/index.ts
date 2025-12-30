@@ -166,6 +166,10 @@ const service = new gcp.cloudrunv2.Service(
 		ingress: "INGRESS_TRAFFIC_ALL",
 		template: {
 			serviceAccount: runtimeSa.email,
+			annotations: {
+				"run.googleapis.com/cpu-throttling": "false",
+				"run.googleapis.com/startup-cpu-boost": "true",
+			},
 			volumes: [
 				{
 					name: "cloudsql",
@@ -184,6 +188,12 @@ const service = new gcp.cloudrunv2.Service(
 				{
 					// Use the immutable digest so updates roll a new revision even if the tag stays the same.
 					image: serverImage.repoDigest,
+					resources: {
+						limits: {
+							cpu: "2",
+							memory: "1Gi",
+						},
+					},
 					ports: {
 						containerPort: 8080,
 					},
