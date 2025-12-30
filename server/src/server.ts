@@ -58,12 +58,20 @@ export function createApp() {
 	app.on(
 		["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		"/api/auth/*",
-		(c) => {
+		async (c) => {
 			logger.info(
 				{ method: c.req.method, path: c.req.path },
 				"Better Auth route hit"
 			);
-			return auth.handler(c.req.raw);
+
+			const res = await auth.handler(c.req.raw);
+
+			const headers = new Headers(res.headers);
+			for (const [key, value] of c.res.headers) {
+				if (!headers.has(key)) headers.set(key, value);
+			}
+
+			return new Response(res.body, { status: res.status, headers });
 		}
 	);
 
