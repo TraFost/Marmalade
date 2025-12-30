@@ -1,5 +1,6 @@
 import { VertexAI } from "@google-cloud/vertexai";
 import { z } from "zod";
+import { logger } from "../logger";
 
 import { env } from "../../configs/env.config";
 
@@ -101,14 +102,20 @@ export class CounselorBrainClient {
 
 		try {
 			const tokenMeta = res?.response ?? null;
-			console.info("[AI][Counselor] Vertex response (trimmed):", {
-				candidates: (tokenMeta?.candidates ?? []).length,
-				metadata: (tokenMeta as any)?.metadata ?? null,
-			});
+			logger.info(
+				{
+					candidates: (tokenMeta?.candidates ?? []).length,
+					metadata: (tokenMeta as any)?.metadata ?? null,
+				},
+				"[AI][Counselor] Vertex response (trimmed)"
+			);
 			const usage = extractTokenUsage(res);
-			if (usage) console.info("[AI][Counselor] token usage:", usage);
+			if (usage) logger.info({ usage }, "[AI][Counselor] token usage");
 		} catch (logErr) {
-			console.warn("[AI][Counselor] Failed to log Vertex response:", logErr);
+			logger.warn(
+				{ err: logErr },
+				"[AI][Counselor] Failed to log Vertex response"
+			);
 		}
 
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
@@ -116,7 +123,7 @@ export class CounselorBrainClient {
 		try {
 			parsed = JSON.parse(raw);
 		} catch (_error) {
-			console.error("CounselorBrain JSON Parse Error. Raw:", raw);
+			logger.error({ raw }, "CounselorBrain JSON Parse Error");
 			throw new Error(`CounselorBrain response was not valid JSON`);
 		}
 
@@ -171,8 +178,9 @@ export class CounselorBrainClient {
 
 			const finishReason = chunk.candidates?.[0]?.finishReason;
 			if (finishReason && finishReason !== "STOP") {
-				console.warn(
-					`[AI][Counselor] Stream ended with reason: ${finishReason}`
+				logger.warn(
+					{ finishReason },
+					"[AI][Counselor] Stream ended with reason"
 				);
 			}
 

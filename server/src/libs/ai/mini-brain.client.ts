@@ -1,7 +1,6 @@
 import { VertexAI } from "@google-cloud/vertexai";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { logger } from "../logger";
-import { AppError } from "../helper/error.helper";
 
 import { env } from "../../configs/env.config";
 import { buildMiniFallbackResult } from "./prompts/shared.prompt";
