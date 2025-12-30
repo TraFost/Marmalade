@@ -6,8 +6,14 @@ export function SupportSection() {
 					You don’t have to carry everything alone.
 				</h2>
 				<div className="space-y-2 text-lg font-light text-foreground/70">
-					<p>Marmalade isn’t a replacement for therapy.</p>
-					<p>It’s a companion for the moments in between —</p>
+					<p>
+						Marmalade is a companion for the moments in between, not a
+						replacement for professional care.
+					</p>
+					<p className="font-medium text-foreground">
+						Always-on listening, secure storage, and safety-first escalation
+						when needed.
+					</p>
 					<p className="font-medium text-foreground">
 						the late-night overthinking,
 					</p>
