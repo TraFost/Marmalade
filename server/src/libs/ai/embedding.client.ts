@@ -2,12 +2,25 @@ import { GoogleAuth } from "google-auth-library";
 
 import { env } from "../../configs/env.config";
 
+export type VertexEmbeddingTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT";
+
 export class EmbeddingClient {
 	private auth = new GoogleAuth({
 		scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 	});
 
-	async embed(text: string): Promise<number[]> {
+	embedQuery(text: string): Promise<number[]> {
+		return this.embed(text, "RETRIEVAL_QUERY");
+	}
+
+	embedDocument(text: string): Promise<number[]> {
+		return this.embed(text, "RETRIEVAL_DOCUMENT");
+	}
+
+	async embed(
+		text: string,
+		taskType: VertexEmbeddingTaskType = "RETRIEVAL_QUERY"
+	): Promise<number[]> {
 		const client = await this.auth.getClient();
 
 		const url = `https://${env.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${env.GOOGLE_CLOUD_PROJECT_ID}/locations/${env.VERTEX_LOCATION}/publishers/google/models/${env.VERTEX_EMBEDDING_MODEL}:predict`;
@@ -19,7 +32,7 @@ export class EmbeddingClient {
 				instances: [
 					{
 						content: text,
-						task_type: "RETRIEVAL_QUERY",
+						task_type: taskType,
 					},
 				],
 			},

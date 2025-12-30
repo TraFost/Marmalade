@@ -133,11 +133,11 @@ async function seed() {
 				.limit(1);
 
 			if (existing.length > 0) {
-				console.log(`⏭️  Skipping existing: ${item.title}`);
+				console.log(`Skipping existing: ${item.title}`);
 				continue;
 			}
 
-			const embeddingVector = await embeddingClient.embed(item.content);
+			const embeddingVector = await embeddingClient.embedDocument(item.content);
 
 			await db.insert(kbDocs).values({
 				title: item.title,

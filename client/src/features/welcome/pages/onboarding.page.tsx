@@ -364,6 +364,9 @@ export function OnboardingPage() {
 	const handleNext = async () => {
 		if (!canProceed) return;
 
+		document.activeElement instanceof HTMLElement &&
+			document.activeElement.blur();
+
 		await persistStep();
 
 		if (isLastStep) {

@@ -1,4 +1,5 @@
 import { MessageLoading } from "@/shared/components/atoms/message-loading";
+import { TextGenerateEffect } from "../../atoms/text-generate-effect";
 
 type SessionTranscriptsProps = {
 	text?: string;
@@ -7,13 +8,13 @@ type SessionTranscriptsProps = {
 
 export function SessionTranscripts({
 	text = "",
-	showDots = true,
+	showDots,
 }: SessionTranscriptsProps) {
 	const hasText = Boolean(text.trim().length);
 	return (
 		<section className="h-24 w-full max-w-md text-center flex flex-col items-center justify-center">
 			{hasText ? (
-				<p key="text">{text}</p>
+				<TextGenerateEffect text={text} />
 			) : showDots ? (
 				<MessageLoading key="dots" />
 			) : null}

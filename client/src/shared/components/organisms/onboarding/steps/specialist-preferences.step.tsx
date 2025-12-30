@@ -1,4 +1,5 @@
 import { OnboardingSection, OnboardingTile } from "../onboarding-primitives";
+import { useEffect, useState } from "react";
 import type { OnboardingStepProps } from "../onboarding.types";
 import type { InteractionPreference, WillStatus } from "shared";
 
@@ -67,7 +68,7 @@ const INTERACTION_PREFERENCES: {
 
 const parseList = (raw: string): string[] =>
 	raw
-		.split(/\n|,/g)
+		.split(/\r?\n/)
 		.map((s) => s.trim())
 		.filter(Boolean)
 		.slice(0, 10);
@@ -76,6 +77,14 @@ export function SpecialistPreferencesStep({
 	formData,
 	onUpdateField,
 }: OnboardingStepProps) {
+	const [lifeAnchorsText, setLifeAnchorsText] = useState(
+		formData.lifeAnchors.join("\n")
+	);
+
+	useEffect(() => {
+		setLifeAnchorsText(formData.lifeAnchors.join("\n"));
+	}, [formData.lifeAnchors]);
+
 	return (
 		<div className="space-y-10 overflow-y-auto max-h-[70vh] pr-5 pb-3">
 			<OnboardingSection title="Did you ever seek help from a psychologist?">
@@ -181,11 +190,14 @@ export function SpecialistPreferencesStep({
 			>
 				<textarea
 					rows={4}
-					placeholder="Example: My little sister, finishing my degree, finishing what i started, putting food on the table for my family"
+					placeholder={
+						"Example:\nMy little sister\nFinishing my degree\nPutting food on the table for my family"
+					}
 					className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
-					value={formData.lifeAnchors.join("\n")}
-					onChange={(event) =>
-						onUpdateField("lifeAnchors", parseList(event.target.value))
+					value={lifeAnchorsText}
+					onChange={(event) => setLifeAnchorsText(event.target.value)}
+					onBlur={() =>
+						onUpdateField("lifeAnchors", parseList(lifeAnchorsText))
 					}
 				/>
 			</OnboardingSection>

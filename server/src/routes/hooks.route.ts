@@ -295,7 +295,7 @@ async function handleChatCompletions(c: any) {
 						{ id, message: "Watchdog triggered: sent reflecting message" },
 						"[ElevenLabs] Watchdog"
 					);
-				}, 4000);
+				}, 11000);
 
 				for await (const chunk of conversationService.handleUserTurnModelStream(
 					userId,
