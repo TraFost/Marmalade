@@ -402,7 +402,7 @@ export function OnboardingPage() {
 
 	return (
 		<section className="bg-background min-h-dvh">
-			<div className="flex size-full flex-col overflow-hidden bg-card lg:flex-row">
+			<div className="flex size-full flex-col overflow-hidden bg-card lg:flex-row min-h-dvh">
 				<aside className="w-full border-b border-border/60 bg-secondary/40 p-6 lg:w-[320px] lg:border-b-0 lg:border-r lg:p-10">
 					<div className="flex items-center gap-3 text-primary">
 						<Logo className="size-16" />
