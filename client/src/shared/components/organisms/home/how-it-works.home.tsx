@@ -2,22 +2,22 @@ const howItWorksSteps = [
 	{
 		title: "Check-in",
 		description:
-			"Do a quick check-in (sleep, mood, DASS-21) so Marmalade can understand your baseline.",
+			"Quick baseline check (sleep, mood) to personalize your session.",
 	},
 	{
 		title: "Talk",
 		description:
-			"Speak freely. Marmalade listens and responds with care, analyzing tone and sentiment.",
+			"Speak naturally. Marmalade streams a calm, human voice in real time.",
 	},
 	{
-		title: "Remember",
+		title: "Memory",
 		description:
-			"Each session updates your emotional profile so conversations feel more personal over time.",
+			"Context is saved reliably so conversations pick up where they left off.",
 	},
 	{
-		title: "Grow",
+		title: "AI Report (SOAP)",
 		description:
-			"View your mood trends and emotional progress in a clean, private dashboard.",
+			"Generate a structured session report (SOAP) summarizing themes, risk, and suggested next steps.",
 	},
 ];
 
