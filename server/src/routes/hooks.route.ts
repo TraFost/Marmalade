@@ -32,10 +32,14 @@ type OpenAIChatCompletionRequest = {
 	tool_choice?: unknown;
 };
 
-const isUuid = (value: string) =>
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-		value
-	);
+const randomizeMessageNotices = [
+	"Let me reflect on that...",
+	"I'm considering your words...",
+	"That's an interesting point...",
+	"Thinking deeply about this...",
+	"That's a lot to ponder...",
+	"I Hear you loud and clear...",
+];
 
 const getMessageText = (m: OpenAIChatMessage | undefined): string => {
 	if (!m) return "";
@@ -251,6 +255,48 @@ async function handleChatCompletions(c: any) {
 				let chunkCount = 0;
 				let firstTokenTime: number | null = null;
 
+				let keepaliveHandle: NodeJS.Timeout | null = setInterval(() => {
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: { content: " " },
+								finish_reason: null,
+							},
+						],
+					});
+				}, 2000);
+
+				let watchdogHandle: NodeJS.Timeout | null = setTimeout(() => {
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: {
+									content: ` ${
+										randomizeMessageNotices[
+											Math.floor(Math.random() * randomizeMessageNotices.length)
+										]
+									} `,
+								},
+								finish_reason: null,
+							},
+						],
+					});
+					logger.info(
+						{ id, message: "Watchdog triggered: sent reflecting message" },
+						"[ElevenLabs] Watchdog"
+					);
+				}, 4000);
+
 				for await (const chunk of conversationService.handleUserTurnModelStream(
 					userId,
 					session.id,
@@ -260,7 +306,17 @@ async function handleChatCompletions(c: any) {
 					const content = chunk.text;
 
 					if (!content || content.trim().length === 0) continue;
+
 					if (!firstTokenTime) firstTokenTime = Date.now() - startTime;
+
+					if (keepaliveHandle) {
+						clearInterval(keepaliveHandle);
+						keepaliveHandle = null;
+					}
+					if (watchdogHandle) {
+						clearTimeout(watchdogHandle);
+						watchdogHandle = null;
+					}
 
 					chunkCount++;
 					send({
@@ -276,6 +332,15 @@ async function handleChatCompletions(c: any) {
 							},
 						],
 					});
+				}
+
+				if (keepaliveHandle) {
+					clearInterval(keepaliveHandle);
+					keepaliveHandle = null;
+				}
+				if (watchdogHandle) {
+					clearTimeout(watchdogHandle);
+					watchdogHandle = null;
 				}
 
 				logger.info(
