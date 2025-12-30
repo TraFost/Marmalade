@@ -257,24 +257,25 @@ async function handleChatCompletions(c: any) {
 					transcript,
 					{ abortController: turnController }
 				)) {
-					if (!firstTokenTime) firstTokenTime = Date.now() - startTime;
-					chunkCount += 1;
+					const content = chunk.text;
 
-					if (chunk && chunk.text) {
-						send({
-							id,
-							object: "chat.completion.chunk",
-							created,
-							model,
-							choices: [
-								{
-									index: 0,
-									delta: { content: chunk.text },
-									finish_reason: null,
-								},
-							],
-						});
-					}
+					if (!content || content.trim().length === 0) continue;
+					if (!firstTokenTime) firstTokenTime = Date.now() - startTime;
+
+					chunkCount++;
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: { content: chunk.text },
+								finish_reason: null,
+							},
+						],
+					});
 				}
 
 				logger.info(
