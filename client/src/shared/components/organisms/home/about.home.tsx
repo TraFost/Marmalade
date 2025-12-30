@@ -18,8 +18,8 @@ export function AboutSection() {
 						a friend.
 					</p>
 					<p className="font-medium text-foreground">
-						Marmalade bridges that gap — a quiet, steady companion that meets
-						you where you are.
+						Marmalade bridges that gap, a quiet, steady companion that meets you
+						where you are.
 					</p>
 					<div className="my-8 h-px w-16 bg-primary/30" />
 					<p className="text-base italic text-foreground/70">
