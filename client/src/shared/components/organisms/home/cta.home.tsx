@@ -1,6 +1,13 @@
 import { Button } from "@/shared/components/atoms/button";
+import { useNavigate } from "react-router";
 
 export function CallToActionSection() {
+	const navigate = useNavigate();
+
+	const handleBeginSession = () => {
+		navigate("/login");
+	};
+
 	return (
 		<section id="cta" className="px-6 py-32">
 			<div className="mx-auto max-w-4xl text-center">
@@ -16,6 +23,7 @@ export function CallToActionSection() {
 					<Button
 						variant="primary"
 						className="w-full px-10 py-4 text-lg font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-1 sm:w-auto"
+						onClick={handleBeginSession}
 					>
 						Begin Session
 					</Button>

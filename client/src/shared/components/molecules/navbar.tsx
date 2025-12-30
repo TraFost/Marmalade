@@ -57,7 +57,7 @@ export function Navbar({ className }: NavbarProps) {
 						asChild
 						className="hidden text-sm font-medium text-foreground hover:text-primary sm:inline-flex"
 					>
-						<a href="#cta">Get Started</a>
+						<a href="/login">Get Started</a>
 					</Button>
 				</div>
 			</div>
