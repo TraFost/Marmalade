@@ -23,7 +23,10 @@ import type {
 	TurnResult,
 	UserStateGraph,
 } from "shared";
-import { BASE_PERSONA } from "../libs/ai/prompts/shared.prompt";
+import {
+	BASE_PERSONA,
+	buildMiniFallbackResult,
+} from "../libs/ai/prompts/shared.prompt";
 import { logger } from "../libs/logger";
 
 type DBClient = typeof db;
@@ -58,10 +61,8 @@ const detectCompanionRequest = (text: string): boolean => {
 		t.includes("can you just be here") ||
 		t.includes("be with me") ||
 		t.includes("i need you") ||
-		t.includes("temani aku") ||
-		t.includes("jangan pergi") ||
-		t.includes("tolong temani") ||
-		t.includes("boleh temani")
+		t.includes("please stay") ||
+		t.includes("stay")
 	);
 };
 
@@ -78,10 +79,6 @@ const CRITICAL_KEYWORDS = [
 	"alone",
 	"scared",
 	"sad",
-	"mati",
-	"bunuh",
-	"sakit",
-	"tolong",
 ];
 
 const CONTEXT_KEYWORDS = [
@@ -100,29 +97,29 @@ const isGreetingTurn = (text: string): boolean => {
 		t === "hi" ||
 		t === "hey" ||
 		t === "hello" ||
-		t === "halo" ||
-		t === "hai" ||
-		t === "pagi" ||
-		t === "siang" ||
-		t === "malam" ||
 		t === "good morning" ||
 		t === "good night" ||
 		t === "good evening" ||
 		t.startsWith("good morning") ||
-		t.startsWith("selamat pagi") ||
-		t.startsWith("selamat siang") ||
-		t.startsWith("selamat malam")
+		t.startsWith("good night") ||
+		t.startsWith("good evening") ||
+		t.startsWith("morning") ||
+		t.startsWith("evening")
 	);
 };
 
 const isTrivialTurn = (text: string): boolean => {
 	const t = text.toLowerCase().trim();
+
 	if (isEllipsisOnlyTurn(t)) return false;
 	if (CRITICAL_KEYWORDS.some((k) => t.includes(k))) return false;
 	if (CONTEXT_KEYWORDS.some((k) => t.includes(k))) return false;
 
+	const emotionalTriggers = ["scared", "fake", "pain", "sad", "help", "alone"];
+	if (emotionalTriggers.some((k) => t.includes(k))) return false;
+
 	const wordCount = t.split(/\s+/).filter(Boolean).length;
-	if (wordCount > 3 || t.length > 18) return false;
+	if (wordCount > 2 || t.length > 12) return false;
 
 	return true;
 };
@@ -141,8 +138,8 @@ const extractPreferredName = (text: string): string | null => {
 	if (!t) return null;
 
 	const patterns: RegExp[] = [
-		/(?:\bmy name is\b|\bcall me\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
-		/(?:\bnama saya\b|\bnamaku\b|\bpanggil aku\b|\bpanggil saya\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
+		/(?:\bmy name is\b|\bcall me\b|\b(?:i am|i'm)\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
+		/(?:\byou can call me\b)\s+([A-Za-z][A-Za-z.'-]{1,24}(?:\s+[A-Za-z][A-Za-z.'-]{1,24}){0,2})/i,
 	];
 
 	for (const re of patterns) {
@@ -164,12 +161,6 @@ const extractPreferredName = (text: string): string | null => {
 			"stressed",
 			"anxious",
 			"depressed",
-			"capek",
-			"sedih",
-			"baik",
-			"oke",
-			"pusing",
-			"takut",
 		]);
 		if (bad.has(cleaned.toLowerCase())) continue;
 
@@ -298,99 +289,43 @@ const isMiniValidationError = (error: unknown): error is AppError =>
 	error instanceof AppError &&
 	MINI_VALIDATION_ERROR_CODES.has(error.code ?? "");
 
-const buildMiniFallbackResult = (userMessage: string): MiniBrainResult => {
-	const isCrisis = /suicide|suicidal|mati|bunuh|kill|end it|sakit/i.test(
-		userMessage
-	);
-
-	return {
-		summaryDelta: "",
-		mood: "mixed",
-		riskLevel: isCrisis ? 4 : 0,
-		themes: isCrisis ? ["safety_threat"] : [],
-		suggestedAction: isCrisis ? "escalate" : "normal",
-		requiresCounselor: isCrisis ? true : false,
-	};
-};
-
 const buildSystemInstruction = (c: {
 	mood: string;
 	riskLevel: number;
 	mode: "support" | "companion";
 	stateDelta: StateDelta;
-	languagePlan: {
-		sentenceLength: "short" | "mixed" | "long";
-		rawness: "low" | "medium" | "high";
-		metaphorDensityHint: "low" | "medium" | "high";
-		abstractionHint: "concrete" | "mixed" | "abstract";
-		profanityTolerance: "none" | "light" | "match";
-	};
-	decision: {
-		responseClass: "understanding" | "reflection" | "anchoring" | "grounding";
-		groundingEligible: boolean;
-		groundingReason: string | null;
-	};
+	languagePlan: any;
+	decision: any;
 }) =>
 	`
-	${BASE_PERSONA}
+    ${BASE_PERSONA}
 
-	# IDENTITY (NON-NEGOTIABLE)
-    You are Marmalade.
-    Marmalade is not a product, object, or metaphorical term.
-    Marmalade is the persistent witness that listens, remembers, and maintains continuity across conversations.
-    You do not redefine or explain yourself differently based on user tone, jokes, or external meanings of the word.
-	
-	# CORE THESIS
-	Restore the user’s fragmented inner story.
-	No pep talk, no forced positivity, no “just move on.”
-	Do memory re-linking, reactivate experiences, surface agency.
-	
-	# TOP-LEVEL DIRECTIVE
-	Help the user remember why they once wanted to live by rebuilding inner conditions that made it real.
-	Focus on reflection and memory, not persuasion or motivational rhetoric.
-	
-	# ARCHITECTURAL ROLE
-	Second layer: The "First Response" has already acknowledged the user.
-	- **DO NOT** repeat what the user just said. Synthesize the *meaning*, don't parrot the words.
-	- Bridge the first thought into deeper reflection or memory link.
-	- If the first layer handled greetings/small-talk, respond lightly and stop.
-	
-	# CONTEXT
-	Mood: ${c.mood}
-	Risk: ${c.riskLevel}
-	Mode: ${c.mode}
-	Detected State Delta: ${JSON.stringify(c.stateDelta)}
-	Intervention: ${JSON.stringify(c.decision)}
-	
-	# LANGUAGE & FLOW
-	- **Anti-Stutter**: Write clean, complete sentences. Use standard punctuation. Only use "..." for a trailing thought at the very end.
-	- Mirror rawness and slang.
-	- ${JSON.stringify(c.languagePlan)}
-	
-	# HARD RULES
-	- No templates, generic empathy, or polished therapy phrases.
-	- **Calibration**: If the user input is short/neutral (e.g. "hello", "good morning", "not much"), stay light. Do NOT psychoanalyze a greeting.
-	- **State Delta**: Reference the detected state delta ONLY when it is meaningful/clear. If the delta is unclear / missing / "no_current_read", do not invent psychological shifts.
-	- **Contrast Resolution**: You may explicitly resolve a contrast that the user themselves stated (e.g., “productive but hollow”), without repeating their wording verbatim.
-	- Somatic/phenomenology questions ONLY if the user expressed distress/emotion in this turn.
-	- Grounding only if groundingEligible true.
-	- Do NOT add a somatic question on neutral/small-talk turns.
-	- No markdown or bolding. Do NOT greet (the first layer handled greetings).
-	
-	# SUICIDALITY HANDLING
-	Treat ideation as narrative collapse, not desire for death.
-	Stabilize story → re-anchor identity → surface agency → address safety.
-	No life arguments, no moralizing, no hope-selling.
-	
-	# OUTPUT
-	- Produce a single coherent response aligned with "responseClass".
-	- Say only what advances reflection, anchoring, or grounding for this turn.
-	- Stop immediately once the core thought is delivered.
-	- Ask a somatic question only if:
-	  - the user expressed distress in this turn, AND
-	  - groundingEligible is true.
-	- Silence is preferable to over-explaining.
-	`.trim();
+    # IDENTITY
+    You are Marmalade, a persistent witness and emotional companion. 
+    You are the second layer of a response. The user's immediate feeling has already been acknowledged.
+    
+    # YOUR ROLE: THE BRIDGE
+    Do NOT acknowledge the user's last sentence (that was done already).
+    Instead, provide the "intervention" or the "narrative bridge."
+    Focus on: ${c.decision.responseClass}.
+    
+    # CONTEXTUAL DATA
+    Current Mood: ${c.mood}
+    Risk Level: ${c.riskLevel}
+    Intervention Type: ${c.decision.responseClass}
+    Language Style: ${c.languagePlan.rawness} rawness, ${c.languagePlan.sentenceLength} sentences.
+
+    # VOICE-FIRST RULES (FOR ELEVENLABS)
+    - No markdown (no **bold**, no # headers).
+    - Use commas to guide vocal pacing. 
+    - Mirror the user's rawness and slang.
+    - If riskLevel is 4: Speak only about safety and grounding.
+    
+    # CRITICAL RESTRICTION
+    Do NOT repeat the user's words. Abstract their experience. 
+    If they say "I'm sad," do not say "I hear you are sad." 
+    Say something like, "The weight seems to be settling in today."
+    `.trim();
 
 export class ConversationService {
 	private static activeTurns = new Map<string, AbortController>();
@@ -723,7 +658,7 @@ export class ConversationService {
 				"[Turn] MiniBrain result"
 			);
 
-			if (mini.requiresCounselor === false) {
+			if (!mini.requiresCounselor) {
 				logger.info(
 					{
 						userId,
@@ -960,7 +895,7 @@ export class ConversationService {
 		}
 	): AsyncGenerator<string, void, void> {
 		const bufferText = options?.bufferText ?? "";
-		const chunkSize = options?.chunkSize ?? 48;
+		const chunkSize = options?.chunkSize ?? 128;
 
 		if (bufferText) yield bufferText;
 
@@ -981,60 +916,78 @@ export class ConversationService {
 		state: any,
 		relevantDocs: any = []
 	): Promise<void> {
-		await db.transaction(async (tx) => {
-			const nextSummary = [state?.summary, mini?.summaryDelta]
-				.filter(Boolean)
-				.join("\n");
-			const basePrefs = asObject(state?.preferences) ?? {};
-			const prefs = mergePreferencesWithImmediateFacts(basePrefs, userMessage);
+		try {
+			await db.transaction(async (tx) => {
+				const nextSummary =
+					[state?.summary, mini?.summaryDelta].filter(Boolean).join("\n") ||
+					state?.summary;
 
-			await this.states.upsert(
-				{
-					userId,
-					summary: nextSummary || state.summary,
-					mood: normalizeMood(mini.mood),
-					riskLevel: mini.riskLevel,
-					lastThemes: mini.themes,
-					baselineDepression: state.baselineDepression,
-					baselineAnxiety: state.baselineAnxiety,
-					baselineStress: state.baselineStress,
-					preferences: prefs,
-				},
-				tx
+				const basePrefs = state?.preferences ?? {};
+				const prefs = mergePreferencesWithImmediateFacts(
+					basePrefs,
+					userMessage
+				);
+
+				await this.states.upsert(
+					{
+						userId,
+						summary: nextSummary,
+						mood: normalizeMood(mini?.mood ?? "mixed"),
+						riskLevel: mini?.riskLevel ?? 0,
+						lastThemes: mini?.themes ?? [],
+						...(state.baselineDepression !== undefined && {
+							baselineDepression: state.baselineDepression,
+						}),
+						...(state.baselineAnxiety !== undefined && {
+							baselineAnxiety: state.baselineAnxiety,
+						}),
+						...(state.baselineStress !== undefined && {
+							baselineStress: state.baselineStress,
+						}),
+						preferences: prefs,
+					},
+					tx
+				);
+
+				await Promise.all([
+					this.riskLogs.create(
+						{
+							userId,
+							sessionId,
+							riskLevel: mini?.riskLevel ?? 0,
+							mood: mini?.mood ?? "mixed",
+							themes: mini?.themes ?? [],
+						},
+						tx
+					),
+					this.sessions.updateMaxRisk(sessionId, mini?.riskLevel ?? 0, tx),
+					this.sessions.incrementMessageCount(sessionId, 1, tx),
+				]);
+
+				await this.messages.create(
+					{
+						userId,
+						sessionId,
+						role: "assistant",
+						content: replyText,
+						metadata: {
+							relevantDocs,
+							tags: ["streamed"],
+							miniAnalysis: mini,
+						},
+						voiceMode: voiceMode as any,
+						riskAtTurn: mini?.riskLevel ?? 0,
+						themes: mini?.themes ?? [],
+					},
+					tx
+				);
+			});
+		} catch (err) {
+			logger.error(
+				{ err, userId, sessionId },
+				"Critical: saveTurnAsync failed"
 			);
-
-			await this.riskLogs.create(
-				{
-					userId,
-					sessionId,
-					riskLevel: mini.riskLevel,
-					mood: mini.mood,
-					themes: mini.themes,
-				},
-				tx
-			);
-
-			await this.sessions.updateMaxRisk(sessionId, mini.riskLevel, tx);
-			await this.sessions.incrementMessageCount(sessionId, 1, tx);
-
-			await this.messages.create(
-				{
-					userId,
-					sessionId,
-					role: "assistant",
-					content: replyText,
-					metadata: { relevantDocs, tags: ["streamed"] },
-					voiceMode: voiceMode as
-						| "comfort"
-						| "coach"
-						| "educational"
-						| "crisis",
-					riskAtTurn: mini.riskLevel,
-					themes: mini.themes,
-				},
-				tx
-			);
-		});
+		}
 	}
 
 	async *handleUserTurnModelStream(
@@ -1046,537 +999,106 @@ export class ConversationService {
 		const turnController =
 			options?.abortController ?? this.beginTurn(sessionId);
 		const signal = turnController.signal;
-		const isAborted = () => Boolean(signal?.aborted);
 
-		const throwIfAborted = () => {
-			if (isAborted()) return true;
-			return false;
-		};
+		const trimmedMsg = userMessage.trim().toLowerCase();
+		if (isGreetingTurn(userMessage) || isEllipsisOnlyTurn(trimmedMsg)) {
+			yield {
+				text: isGreetingTurn(userMessage)
+					? "Hello! I'm here."
+					: "I'm listening...",
+				voiceMode: "comfort",
+			};
+			this.endTurn(sessionId, turnController);
+			return;
+		}
 
-		let abortListener: (() => void) | null = null;
-		const abortPromise: Promise<"aborted"> | null = signal
-			? new Promise((resolve) => {
-					if (signal.aborted) return resolve("aborted");
-					abortListener = () => resolve("aborted");
-					signal.addEventListener("abort", abortListener, { once: true });
-			  })
-			: null;
+		const statePromise = this.states.getByUserId(userId);
+		const recentMessagesPromise = this.messages.listRecentBySession(
+			sessionId,
+			5
+		);
+		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
+
 		try {
-			const dataPromise = Promise.allSettled([
-				this.sessions.findById(sessionId),
-				this.states.getByUserId(userId),
-				this.messages.listRecentBySession(sessionId, 5),
+			yield { text: "I hear that", voiceMode: "comfort" };
+
+			const [state, recent, relevant] = await Promise.all([
+				statePromise,
+				recentMessagesPromise,
+				ragPromise,
 			]);
 
-			const dataResults = await dataPromise;
-			throwIfAborted();
-
-			const isStandalone =
-				isTrivialTurn(userMessage) || isGreetingTurn(userMessage);
-
-			let miniPromise: Promise<any> | null = null;
-			let ragPromise: Promise<any> | null = null;
-			if (!isStandalone) {
-				miniPromise = this.miniBrain
-					.analyzeTurn({
-						userMessage,
-						recentMessages: [],
-						currentState: {},
-					})
-					.catch((error) => {
-						if (isMiniValidationError(error)) {
-							logger.warn(
-								{ error },
-								"[Turn][stream] MiniBrain validation failed, sending fallback"
-							);
-							return buildMiniFallbackResult(userMessage);
-						}
-						throw error;
-					});
-
-				ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
-
-				logger.info(
-					{ userId, sessionId, isStandalone },
-					"[Turn][stream] Started miniPromise and ragPromise"
-				);
-
-				miniPromise
-					?.then((r) =>
-						logger.info(
-							{
-								mini: {
-									requiresCounselor: r?.requiresCounselor,
-									risk: r?.riskLevel,
-								},
-							},
-							"[Turn][stream] Mini resolved"
-						)
-					)
-					.catch((e) => logger.warn({ err: e }, "[Turn][stream] Mini failed"));
-
-				ragPromise
-					?.then((r) =>
-						logger.info(
-							{ count: Array.isArray(r) ? r.length : null },
-							"[Turn][stream] RAG resolved"
-						)
-					)
-					.catch((e) => logger.warn({ err: e }, "[Turn][stream] RAG failed"));
-			}
-			const sessionRes =
-				dataResults[0]?.status === "fulfilled" ? dataResults[0].value : null;
-			const stateRes =
-				dataResults[1]?.status === "fulfilled" ? dataResults[1].value : null;
-
-			if (!sessionRes || sessionRes.userId !== userId) {
-				throw new AppError("Session not found", 404);
-			}
-			throwIfAborted();
-
-			if (isEllipsisOnlyTurn(userMessage.trim().toLowerCase())) {
-				const replyText = "Hey, I'm ready to listen whenever u'r ready to!";
-				yield { text: replyText, voiceMode: "comfort" };
-
-				const prefs = asObject((stateRes as any)?.preferences) ?? {};
-				const baseGraph = ensureGraph(prefs.userStateGraph);
-				const miniDummy = buildMiniFallbackResult(userMessage);
-				try {
-					await this.saveTurnAsync(
-						userId,
-						sessionId,
-						userMessage,
-						replyText,
-						miniDummy,
-						"comfort",
-						{
-							...stateRes,
-							preferences: { ...prefs, userStateGraph: baseGraph },
-						},
-						[]
-					);
-				} catch (err) {
-					logger.error({ err }, "Failed to save ellipsis short-circuit turn");
-				}
-				return;
-			}
-
-			if (isGreetingTurn(userMessage)) {
-				const replyText =
-					"Hello! I'm here to listen whenever you're ready to share.";
-				yield { text: replyText, voiceMode: "comfort" };
-
-				const prefs = asObject((stateRes as any)?.preferences) ?? {};
-				const baseGraph = ensureGraph(prefs.userStateGraph);
-				const miniDummy = buildMiniFallbackResult(userMessage);
-				try {
-					await this.saveTurnAsync(
-						userId,
-						sessionId,
-						userMessage,
-						replyText,
-						miniDummy,
-						"comfort",
-						{
-							...stateRes,
-							preferences: { ...prefs, userStateGraph: baseGraph },
-						},
-						[]
-					);
-				} catch (err) {
-					logger.error({ err }, "Failed to save greeting short-circuit turn");
-				}
-				return;
-			}
-
-			const userName = (stateRes as any)?.preferences?.name || "Friend";
-			const prefs = asObject((stateRes as any)?.preferences) ?? {};
-			const baseGraph = ensureGraph(prefs.userStateGraph);
-			const baseSignals = (asObject(prefs.stateMappingSignals) ??
-				null) as StateMappingSignals | null;
-
-			const firstResponseStream =
-				this.firstResponseBrain.generateFirstResponseStream({
+			const miniBrainPromise = this.miniBrain
+				.analyzeTurn({
 					userMessage,
-					userName,
-					mode: detectCompanionRequest(userMessage) ? "companion" : "support",
-					riskLevel: 0,
-					companionRequested: detectCompanionRequest(userMessage),
-					isStandalone: isStandalone,
-				});
+					recentMessages: recent
+						.map((m) => ({ role: m.role, content: m.content }))
+						.reverse(),
+					currentState: state || {},
+				})
+				.catch(() => buildMiniFallbackResult(userMessage));
 
-			let firstResponseFullText = "";
-
-			let firstResponseUsage = {
-				inputTokens: 0,
-				outputTokens: 0,
-				totalTokens: 0,
-			};
-			let firstResponseUsageSeen = false;
-			const recentMessages =
-				dataResults[2].status === "fulfilled" ? dataResults[2].value : [];
-
-			if (isStandalone) {
-				for await (const item of firstResponseStream as AsyncIterable<any>) {
-					if (isAborted()) {
-						try {
-							await (firstResponseStream as any)?.return?.();
-						} catch {
-							// ignore
-						}
-						if (throwIfAborted()) return;
-					}
-					const chunk = item?.text ?? item;
-					const usage = item?.usage;
-					if (typeof chunk === "string" && chunk.length) {
-						firstResponseFullText += chunk;
-						yield { text: chunk, voiceMode: "comfort" };
-					}
-					if (usage) {
-						firstResponseUsageSeen = true;
-						firstResponseUsage.inputTokens += (usage.inputTokens ??
-							0) as number;
-						firstResponseUsage.outputTokens += (usage.outputTokens ??
-							0) as number;
-						firstResponseUsage.totalTokens += (usage.totalTokens ??
-							0) as number;
-					}
-				}
-
-				const finalContent = firstResponseFullText.trim();
-
-				logger.info(
-					{ userId, sessionId, length: finalContent.length },
-					"[Turn][stream] Saving trivial first-response only"
-				);
-
-				const miniDummy = {
-					summaryDelta: "",
-					mood: "mixed",
-					riskLevel: 0,
-					themes: [],
-					suggestedAction: "normal",
-					requiresCounselor: false,
-				};
-				try {
-					await this.saveTurnAsync(
-						userId,
-						sessionId,
-						userMessage,
-						finalContent,
-						miniDummy,
-						"comfort",
-						{
-							...stateRes,
-							preferences: { ...prefs, userStateGraph: baseGraph },
-						},
-						[]
-					);
-					logger.info(
-						{ userId, sessionId, len: finalContent.length },
-						"[Turn][stream] trivial turn saved"
-					);
-				} catch (err) {
-					logger.error({ err }, "Failed to save trivial turn");
-				}
-
-				return;
-			}
-
-			const quickCoordinated = coordinateTurn({
+			const coordinated = coordinateTurn({
 				userMessage,
-				graph: baseGraph,
-				signals: baseSignals,
-			});
-			const quickRiskLevel = (stateRes as any)?.riskLevel ?? 0;
-			const quickMood = (stateRes as any)?.mood ?? "mixed";
-			const quickThemes = (stateRes as any)?.lastThemes ?? [];
-			const quickSystemInstruction = buildSystemInstruction({
-				mood: quickMood,
-				riskLevel: quickRiskLevel,
-				mode: detectCompanionRequest(userMessage) ? "companion" : "support",
-				stateDelta: quickCoordinated.delta,
-				languagePlan: quickCoordinated.languagePlan,
-				decision: quickCoordinated.decision,
+				graph: ensureGraph((state as any)?.preferences?.userStateGraph),
 			});
 
-			let proResponseFullText = "";
-			let proStart = Date.now();
-			let proFirstChunkAt: number | null = null;
-			let counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-			let counselorUsageSeen = false;
-			let counselorStarted = false;
-			let counselorIterator: {
-				next: () => Promise<IteratorResult<any, any>>;
-			} | null = null;
-			let counselorNext: Promise<IteratorResult<any, any>> | null = null;
+			const miniResults = await miniBrainPromise;
 
-			const thresholdWords = 8;
-			let emittedWordCount = 0;
-			const countWords = (s: string) =>
-				s.trim().split(/\s+/).filter(Boolean).length;
-
-			const startCounselor = () => {
-				if (counselorStarted) return;
-				counselorStarted = true;
-				logger.info(
-					{ userId, sessionId, emittedWordCount, thresholdWords },
-					"[Turn][stream] startCounselor (warming up)"
-				);
-
-				const history = (recentMessages as any[])
+			const stream = this.counselorBrain.generateReplyTextStream({
+				conversationWindow: recent
 					.map((m) => ({ role: m.role, content: m.content }))
-					.reverse()
-					.concat([{ role: "assistant", content: firstResponseFullText }]);
-				logger.info(
-					{ historyLength: history.length },
-					"[Turn][stream] Counselor history prepared"
-				);
+					.reverse(),
+				systemInstruction: buildSystemInstruction({
+					mood: miniResults.mood || (state as any)?.mood || "mixed",
+					riskLevel: miniResults.riskLevel ?? 0,
+					mode: "support",
+					stateDelta: coordinated.delta,
+					languagePlan: coordinated.languagePlan,
+					decision: coordinated.decision,
+				}),
+				relevantDocs: relevant,
+				baseline: {
+					depression: (state as any)?.baselineDepression ?? null,
+					anxiety: (state as any)?.baselineAnxiety ?? null,
+					stress: (state as any)?.baselineStress ?? null,
+				},
+				summary: (state as any)?.summary ?? null,
+				riskLevel: miniResults.riskLevel ?? 0,
+				themes: miniResults.themes ?? [],
+				preferences: (state as any)?.preferences ?? {},
+				safetyMode: this.getSafetyMode(miniResults.riskLevel ?? 0),
+			});
 
-				const stream = this.counselorBrain.generateReplyTextStream({
-					conversationWindow: history,
-					summary: (stateRes as any)?.summary ?? null,
-					relevantDocs: [],
-					systemInstruction: quickSystemInstruction,
-					mood: quickMood,
-					riskLevel: quickRiskLevel,
-					themes: Array.isArray(quickThemes) ? quickThemes : [],
-					safetyMode: this.getSafetyMode(quickRiskLevel),
-					preferences: { ...prefs, userStateGraph: quickCoordinated.nextGraph },
-				});
-
-				const iterator = (stream as any)[Symbol.asyncIterator]();
-				counselorIterator = iterator;
-				proStart = Date.now();
-				proFirstChunkAt = null;
-				counselorUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-				counselorUsageSeen = false;
-				counselorNext = iterator.next();
-			};
-
-			const firstIterator = (firstResponseStream as AsyncIterable<any>)[
-				Symbol.asyncIterator
-			]();
-			let firstNext: Promise<IteratorResult<any, any>> | null =
-				firstIterator.next();
-
-			const finalizeAndSaveAsync = (finalContent: string) => {
-				(async () => {
-					let mini: any;
-					let relevantDocs: any;
-					try {
-						[mini, relevantDocs] = await Promise.all([miniPromise, ragPromise]);
-					} catch (_e) {
-						logger.warn("[Turn] Analysis failed, using fallback.");
-						mini = {
-							summaryDelta: "",
-							mood: "mixed",
-							riskLevel: 0,
-							themes: [],
-							suggestedAction: "normal",
-						};
-						relevantDocs = [];
-					}
-
-					const coordinated = coordinateTurn({
-						userMessage,
-						graph: baseGraph,
-						signals: baseSignals,
-					});
-
-					await this.saveTurnAsync(
-						userId,
-						sessionId,
-						userMessage,
-						finalContent,
-						mini,
-						"comfort",
-						{
-							...stateRes,
-							preferences: { ...prefs, userStateGraph: coordinated.nextGraph },
-						},
-						relevantDocs
-					);
-				})().catch((err) => logger.error({ err }, "Save failed"));
-			};
-
-			try {
-				while (firstNext || counselorNext) {
-					throwIfAborted();
-					const races: Array<
-						Promise<{ src: "first" | "counselor" | "abort"; r: any }>
-					> = [];
-					if (firstNext)
-						races.push(firstNext.then((r) => ({ src: "first" as const, r })));
-					if (counselorNext)
-						races.push(
-							counselorNext.then((r) => ({ src: "counselor" as const, r }))
-						);
-					if (abortPromise) {
-						// Abort should preempt waiting on slow upstream model streams.
-						races.push(
-							abortPromise.then(() => ({ src: "abort" as const, r: null }))
-						);
-					}
-
-					const winner = await Promise.race(races);
-					if (winner.src === "abort") {
-						try {
-							await (firstIterator as any)?.return?.();
-						} catch {
-							// ignore
-						}
-						try {
-							await (counselorIterator as any)?.return?.();
-						} catch {
-							// ignore
-						}
-						return;
-					}
-
-					if (winner.src === "first") {
-						firstNext = null;
-						if (winner.r?.done) {
-							if (!counselorStarted) {
-								if (miniPromise) {
-									let miniResult: any;
-									try {
-										miniResult = await miniPromise;
-									} catch (err) {
-										console.warn(
-											"[Turn][stream] MiniBrain failed during decision, allowing counselor by default.",
-											err
-										);
-										miniResult = { requiresCounselor: true };
-									}
-									if (miniResult.requiresCounselor === false) {
-										finalizeAndSaveAsync(firstResponseFullText);
-										return;
-									}
-								}
-								startCounselor();
-							}
-							firstNext = null;
-						} else {
-							const item = winner.r.value;
-							const chunk = item?.text ?? item;
-							const usage = item?.usage;
-							if (typeof chunk === "string" && chunk.length) {
-								firstResponseFullText += chunk;
-								emittedWordCount += countWords(chunk);
-								yield { text: chunk, voiceMode: "comfort" };
-							}
-							if (usage) {
-								firstResponseUsageSeen = true;
-								firstResponseUsage.inputTokens += (usage.inputTokens ??
-									0) as number;
-								firstResponseUsage.outputTokens += (usage.outputTokens ??
-									0) as number;
-								firstResponseUsage.totalTokens += (usage.totalTokens ??
-									0) as number;
-							}
-
-							if (!counselorStarted && emittedWordCount >= thresholdWords) {
-								if (miniPromise) {
-									let miniResult: any;
-									try {
-										miniResult = await miniPromise;
-									} catch (err) {
-										console.warn(
-											"[Turn][stream] MiniBrain failed during decision, allowing counselor by default.",
-											err
-										);
-										miniResult = { requiresCounselor: true };
-									}
-									if (miniResult.requiresCounselor === false) {
-										finalizeAndSaveAsync(firstResponseFullText);
-										return;
-									}
-								}
-								startCounselor();
-							}
-
-							if (firstIterator && !counselorNext) {
-								firstNext = firstIterator.next();
-							} else if (!counselorStarted) {
-								firstNext = firstIterator.next();
-							} else {
-								firstNext = firstIterator.next();
-							}
-						}
-					}
-
-					if (winner.src === "counselor") {
-						counselorNext = null;
-						if (winner.r?.done) {
-							break;
-						}
-
-						try {
-							await firstIterator.return?.();
-						} catch {
-							// ignore
-						}
-						firstNext = null;
-
-						const item = winner.r.value;
-						const chunkText = item?.text ?? item;
-						const usage = item?.usage;
-						if (typeof chunkText === "string" && chunkText.length) {
-							if (!proFirstChunkAt) proFirstChunkAt = Date.now();
-							proResponseFullText += chunkText;
-							yield { text: chunkText, voiceMode: "comfort" };
-						}
-						if (usage) {
-							counselorUsageSeen = true;
-							counselorUsage.inputTokens += (usage.inputTokens ?? 0) as number;
-							counselorUsage.outputTokens += (usage.outputTokens ??
-								0) as number;
-							counselorUsage.totalTokens += (usage.totalTokens ?? 0) as number;
-						}
-
-						{
-							const iterator = counselorIterator as any;
-							counselorNext =
-								typeof iterator?.next === "function" ? iterator.next() : null;
-						}
-					}
-				}
-			} catch (err) {
-				if (err instanceof AppError && err.code === "TURN_ABORTED") {
-					try {
-						await (firstIterator as any)?.return?.();
-					} catch {
-						// ignore
-					}
-					try {
-						await (counselorIterator as any)?.return?.();
-					} catch {
-						// ignore
-					}
-					return;
-				}
-				logger.error({ err }, "Turn streaming failed");
-				if (!firstResponseFullText) {
-					firstResponseFullText = EMERGENCY_PACKET.replyText;
-					yield { text: firstResponseFullText, voiceMode: "comfort" };
+			let proText = "";
+			for await (const chunk of stream) {
+				if (signal.aborted) break;
+				const text = this.extractText(chunk);
+				if (text) {
+					proText += text;
+					yield { text, voiceMode: "comfort" };
 				}
 			}
 
-			const finalContent = (
-				firstResponseFullText +
-				" " +
-				proResponseFullText
-			).trim();
-			if (!isAborted()) finalizeAndSaveAsync(finalContent);
+			if (proText.trim() && !signal.aborted) {
+				this.saveTurnAsync(
+					userId,
+					sessionId,
+					userMessage,
+					proText.trim(),
+					miniResults,
+					"comfort",
+					{ preferences: { userStateGraph: coordinated.nextGraph } },
+					relevant
+				).catch((e) => logger.error(e, "Async Save failed"));
+			}
+		} catch (e) {
+			logger.error(e, "[Stream] Error");
+			yield {
+				text: "I'm having a little trouble. One sec?",
+				voiceMode: "comfort",
+			};
 		} finally {
-			if (abortListener) {
-				try {
-					signal?.removeEventListener("abort", abortListener);
-				} catch {
-					// ignore
-				}
-			}
 			this.endTurn(sessionId, turnController);
 		}
 	}
@@ -1681,6 +1203,18 @@ export class ConversationService {
 		if (risk === 3) return "high_caution";
 		if (risk === 2) return "caution";
 		return "normal";
+	}
+
+	private extractText(chunk: any): string {
+		if (!chunk) return "";
+		if (typeof chunk === "string") return chunk;
+
+		return (
+			chunk?.candidates?.[0]?.content?.parts?.[0]?.text ||
+			chunk?.choices?.[0]?.delta?.content ||
+			chunk?.text ||
+			""
+		);
 	}
 
 	private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

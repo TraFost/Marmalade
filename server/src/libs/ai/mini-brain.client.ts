@@ -4,6 +4,7 @@ import { logger } from "../logger";
 import { AppError } from "../helper/error.helper";
 
 import { env } from "../../configs/env.config";
+import { buildMiniFallbackResult } from "./prompts/shared.prompt";
 
 export type MiniBrainInput = {
 	userMessage: string;
@@ -67,106 +68,43 @@ export class MiniBrainClient {
 		const model = this.vertex.getGenerativeModel({
 			model: env.VERTEX_MINI_MODEL,
 			generationConfig: {
-				temperature: 0.4,
+				temperature: 0.1,
 				responseMimeType: "application/json",
 			},
 		});
 
 		const prompt = this.buildPrompt(input);
 		const res = await model.generateContent({
-			contents: [
-				{
-					role: "user",
-					parts: [{ text: prompt }],
-				},
-			],
+			contents: [{ role: "user", parts: [{ text: prompt }] }],
 		});
 
-		const extractTokenUsage = (obj: any) => {
-			try {
-				const resp = obj?.response ?? obj ?? {};
-				const candidateMeta = (resp?.candidates?.[0] as any)?.metadata ?? {};
-				const metadata = resp?.metadata ?? {};
-				return {
-					inputTokens:
-						candidateMeta.inputTokens ??
-						candidateMeta.input_tokens ??
-						metadata.input_tokens ??
-						metadata.inputTokens ??
-						resp?.usage?.input_tokens ??
-						null,
-					outputTokens:
-						candidateMeta.outputTokens ??
-						candidateMeta.output_tokens ??
-						metadata.output_tokens ??
-						metadata.outputTokens ??
-						resp?.usage?.output_tokens ??
-						null,
-					totalTokens:
-						candidateMeta.totalTokens ??
-						candidateMeta.total_tokens ??
-						metadata.total_tokens ??
-						metadata.totalTokens ??
-						resp?.usage?.total_tokens ??
-						null,
-				};
-			} catch (err) {
-				return null;
-			}
-		};
+		const usageMetadata = res.response?.usageMetadata;
+		const usage = usageMetadata
+			? {
+					inputTokens: usageMetadata.promptTokenCount,
+					outputTokens: usageMetadata.candidatesTokenCount,
+					totalTokens: usageMetadata.totalTokenCount,
+			  }
+			: null;
 
-		try {
-			const tokenMeta = res?.response ?? null;
-			logger.info(
-				{
-					candidates: (tokenMeta?.candidates ?? []).length,
-					metadata: (tokenMeta as any)?.metadata ?? null,
-				},
-				"[AI][Mini] Vertex response (trimmed)"
-			);
-			const usage = extractTokenUsage(res);
-			if (usage) logger.info({ usage }, "[AI][Mini] token usage");
-		} catch (logErr) {
-			logger.warn({ logErr }, "[AI][Mini] Failed to log Vertex response");
+		if (usage) logger.info({ usage }, "[AI][Mini] usage tracked");
+
+		const finishReason = res.response?.candidates?.[0]?.finishReason;
+		if (finishReason && finishReason !== "STOP") {
+			logger.warn({ finishReason }, "[AI][Mini] Non-stop finish reason");
 		}
 
 		const raw = res.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-		let parsed: unknown;
+
 		try {
-			parsed = JSON.parse(raw);
+			const parsed = JSON.parse(raw);
+			const parsedRes = miniResponseSchema.parse(parsed) as any;
+			if (usage) parsedRes.__tokenUsage = usage;
+			return parsedRes;
 		} catch (error) {
-			logger.warn(
-				{ error: (error as Error).message, raw },
-				"[AI][Mini] Failed to parse JSON from MiniBrain"
-			);
-			throw new AppError(
-				"MiniBrain response was not valid JSON",
-				400,
-				"INVALID_MINI_RESPONSE_JSON"
-			);
+			logger.error({ error, raw }, "[AI][Mini] Parse/Validation failed");
+			return buildMiniFallbackResult(input.userMessage);
 		}
-
-		let parsedRes: any;
-		try {
-			parsedRes = miniResponseSchema.parse(parsed) as any;
-		} catch (err) {
-			if (err instanceof ZodError) {
-				logger.warn(
-					{ issues: err.issues, raw },
-					"[AI][Mini] MiniBrain response failed validation"
-				);
-				throw new AppError(
-					"MiniBrain response failed validation",
-					400,
-					"INVALID_MINI_RESPONSE_SCHEMA"
-				);
-			}
-			throw err;
-		}
-
-		const usage = extractTokenUsage(res);
-		if (usage) parsedRes.__tokenUsage = usage;
-		return parsedRes;
 	}
 
 	private buildPrompt(input: MiniBrainInput): string {
@@ -182,6 +120,7 @@ export class MiniBrainClient {
 			"# GUARDRAILS",
 			"- Keep themes short (1-3 words each).",
 			"- summaryDelta must be ONE sentence.",
+			"- If the user's message is harmful, prioritize the correct riskLevel over any other formatting rule.",
 			"",
 			"# INPUT",
 			`Message: ${JSON.stringify(input.userMessage)}`,

@@ -5,6 +5,7 @@ import { ConversationService } from "../services/conversation.service";
 import { env } from "../configs/env.config";
 import { db } from "../libs/db/db.lib";
 import { logger } from "../libs/logger";
+import { randomUUID } from "crypto";
 
 const messageRepo = new MessageRepository();
 const sessionService = new SessionService();
@@ -64,6 +65,8 @@ async function handleChatCompletions(c: any) {
 	let body: OpenAIChatCompletionRequest;
 	try {
 		body = (await c.req.json()) as OpenAIChatCompletionRequest;
+
+		logger.info({ body }, "[ElevenLabs] Incoming request body");
 	} catch {
 		return openAiError("Invalid JSON body", 400);
 	}
@@ -112,21 +115,59 @@ async function handleChatCompletions(c: any) {
 			{ userId, incomingSessionId, resolvedSessionId: session.id },
 			"prepareTurn: session resolved"
 		);
-		await db.transaction(async (tx) => {
-			await messageRepo.create(
-				{
-					userId,
-					sessionId: session.id,
-					role: "user",
-					content: transcript,
-					metadata: incomingSessionId
-						? { externalSessionId: incomingSessionId }
-						: undefined,
-				},
-				tx
+
+		const messageId = randomUUID();
+		const createMessageAndInc = async () => {
+			try {
+				await db.transaction(async (tx) => {
+					const { created } = await messageRepo.createIfNotExists(
+						{
+							messageId,
+							userId,
+							sessionId: session.id,
+							role: "user",
+							content: transcript,
+							metadata: incomingSessionId
+								? { externalSessionId: incomingSessionId }
+								: undefined,
+						},
+						tx
+					);
+
+					if (created) {
+						await sessionService.incrementMessageCount(session.id, 1, tx);
+					}
+				});
+			} catch (err) {
+				logger.error(
+					{ err, userId, sessionId: session.id, messageId },
+					"Background message create failed"
+				);
+			}
+		};
+
+		let usedWaitUntil = false;
+		try {
+			const ec = (c as any).executionCtx;
+			if (ec && typeof ec.waitUntil === "function") {
+				ec.waitUntil(createMessageAndInc());
+				usedWaitUntil = true;
+			}
+		} catch (err) {
+			logger.debug(
+				{ err, userId, sessionId: session.id, messageId },
+				"ExecutionContext not available; falling back to fire-and-forget"
 			);
-			await sessionService.incrementMessageCount(session.id, 1, tx);
-		});
+		}
+
+		if (!usedWaitUntil) {
+			createMessageAndInc().catch((err) =>
+				logger.error(
+					{ err, userId, sessionId: session.id, messageId },
+					"Background message create failed"
+				)
+			);
+		}
 
 		return session;
 	};
@@ -175,10 +216,15 @@ async function handleChatCompletions(c: any) {
 	const encoder = new TextEncoder();
 	let turnController: AbortController | null = null;
 	let resolvedSessionId: string | null = null;
+	const startTime = Date.now();
+
 	const stream = new ReadableStream({
 		async start(controller) {
-			const send = (obj: unknown) =>
+			const send = (obj: unknown) => {
+				if (Math.random() > 0.8)
+					logger.debug({ obj }, "[ElevenLabs] Sending chunk");
 				controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+			};
 
 			try {
 				const session = await prepareTurn();
@@ -202,28 +248,44 @@ async function handleChatCompletions(c: any) {
 					],
 				});
 
+				let chunkCount = 0;
+				let firstTokenTime: number | null = null;
+
 				for await (const chunk of conversationService.handleUserTurnModelStream(
 					userId,
 					session.id,
 					transcript,
 					{ abortController: turnController }
 				)) {
-					if (chunk.text && chunk.text !== "...") {
-						send({
-							id,
-							object: "chat.completion.chunk",
-							created,
-							model,
-							choices: [
-								{
-									index: 0,
-									delta: { content: chunk.text },
-									finish_reason: null,
-								},
-							],
-						});
-					}
+					const content = chunk.text;
+
+					if (!content || content.trim().length === 0) continue;
+					if (!firstTokenTime) firstTokenTime = Date.now() - startTime;
+
+					chunkCount++;
+					send({
+						id,
+						object: "chat.completion.chunk",
+						created,
+						model,
+						choices: [
+							{
+								index: 0,
+								delta: { content: chunk.text },
+								finish_reason: null,
+							},
+						],
+					});
 				}
+
+				logger.info(
+					{
+						firstTokenLatency: `${firstTokenTime}ms`,
+						totalChunks: chunkCount,
+						totalTime: `${Date.now() - startTime}ms`,
+					},
+					"[ElevenLabs] Stream finished sending to ElevenLabs"
+				);
 
 				send({
 					id,
@@ -241,9 +303,9 @@ async function handleChatCompletions(c: any) {
 
 				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 			} catch (e: any) {
-				console.error("Streaming turn failed", e);
+				logger.error({ err: e.message }, "[ElevenLabs] Streaming turn error");
+
 				if (e?.code === "TURN_ABORTED") {
-					// client disconnected or new turn started; end stream cleanly
 					try {
 						send({
 							id,
@@ -291,7 +353,7 @@ async function handleChatCompletions(c: any) {
 					// ignore
 				}
 			}
-			// Best-effort: if the controller we aborted is still the active one, clear it
+
 			if (resolvedSessionId && turnController) {
 				conversationService.endTurn(resolvedSessionId, turnController);
 			}
@@ -304,7 +366,6 @@ async function handleChatCompletions(c: any) {
 			"Cache-Control": "no-cache, no-transform",
 			"X-Accel-Buffering": "no",
 			Connection: "keep-alive",
-			"Transfer-Encoding": "chunked",
 		},
 	});
 }

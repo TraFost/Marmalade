@@ -110,7 +110,7 @@ export class FirstResponseClient {
 		const model = this.vertex.getGenerativeModel({
 			model: env.VERTEX_MINI_MODEL,
 			generationConfig: {
-				temperature: 0.5,
+				temperature: 0.4,
 				topP: 0.8,
 			},
 		});
@@ -121,45 +121,24 @@ export class FirstResponseClient {
 		});
 
 		for await (const item of result.stream) {
-			let usage:
-				| { inputTokens?: number; outputTokens?: number; totalTokens?: number }
-				| undefined;
-			try {
-				const itemMeta = (item?.candidates?.[0] as any)?.metadata ?? null;
-				if (itemMeta) {
-					usage = {
-						inputTokens:
-							itemMeta.inputTokens ??
-							itemMeta.input_tokens ??
-							itemMeta?.usage?.input_tokens ??
-							null,
-						outputTokens:
-							itemMeta.outputTokens ??
-							itemMeta.output_tokens ??
-							itemMeta?.usage?.output_tokens ??
-							null,
-						totalTokens:
-							itemMeta.totalTokens ??
-							itemMeta.total_tokens ??
-							itemMeta?.usage?.total_tokens ??
-							null,
-					};
-					console.info(
-						"[AI][FirstResponse] stream item metadata:",
-						itemMeta,
-						"usage:",
-						usage
-					);
-				}
-			} catch (logErr) {
-				console.warn(
-					"[AI][FirstResponse] Failed to log stream item metadata:",
-					logErr
-				);
-			}
+			const chunk = item.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-			const chunk = item.candidates?.[0]?.content?.parts?.[0]?.text;
-			if (chunk) yield { text: chunk, usage };
+			const usageMetadata =
+				(item as any).usageMetadata || (item as any).metadata?.usage;
+			const usage = usageMetadata
+				? {
+						inputTokens:
+							usageMetadata.promptTokenCount ?? usageMetadata.inputTokens,
+						outputTokens:
+							usageMetadata.candidatesTokenCount ?? usageMetadata.outputTokens,
+						totalTokens:
+							usageMetadata.totalTokenCount ?? usageMetadata.totalTokens,
+				  }
+				: undefined;
+
+			if (chunk || usage) {
+				yield { text: chunk, usage };
+			}
 		}
 	}
 
@@ -168,44 +147,33 @@ export class FirstResponseClient {
 		const isStandalone = !!input.isStandalone;
 
 		const modeLine = isStandalone
-			? "The user's message is a greeting or small-talk. Reply lightly and stop."
-			: "Reflect the felt meaning of the message in one line and stop.";
+			? "The user's message is a greeting or small-talk. Reply with a warm, brief acknowledgement and stop."
+			: "Reflect the core emotional weight of the message in one simple spoken sentence and stop.";
 
 		return [
-			"You are Marmalade, the assistant itself.",
-			"Marmalade is NOT food, jam, or a preserve.",
-			"Never give dictionary definitions for the name.",
-			"If asked what Marmalade is: describe it as a companion or mental health AI.",
+			"You are Marmalade.",
+			"Identity: You are a persistent witness and companion. NOT food or jam.",
 			"",
 			modeLine,
 			"",
-			"OUTPUT RULES:",
+			"VOICE-FIRST OUTPUT RULES:",
 			isStandalone
-				? "- LENGTH: 4-6 words maximum."
-				: "- LENGTH: 13-16 words maximum.",
-			"- Output ONE line only.",
-			"- No therapy tone.",
-			"- No pep talk.",
-			"- No stalling phrases.",
-			"- No metaphors.",
-			"- No questions.",
-			"- No meta talk (no AI, no system, no layers).",
+				? "- LENGTH: Very brief (under 6 words)."
+				: "- LENGTH: One natural sentence (10-15 words).",
+			"- STYLE: Spoken, informal English. Avoid complex 'written' words.",
+			"- NO therapy-speak, no 'I understand', no 'It sounds like.'",
+			"- NO metaphors or abstract analysis.",
+			"- NO questions and NO markdown (no bolding, no italics).",
+			"- Use commas to create natural breathing pauses for the voice engine.",
 			isStandalone ? "- You MAY greet back." : "- Do NOT greet back.",
-			"- Do not infer causes or reasons the user did not explicitly state.",
-			"- Do not narrate the user's thoughts or questions; reflect only the lived experience.",
-			"- Do NOT reuse exact phrases from the user.",
-			"- You may reflect an explicit contrast or feeling stated by the user, without analysis.",
-			'- Avoid impersonal or generalized phrasing (e.g., "can feel", "often", "many people").',
-			"- Write as recognition of the present experience, not a retelling or summary.",
-			"- Use natural noun/adjective forms for internal states (e.g., “hollow inside,” “hollowness”), avoid awkward abstractions.",
-			"- Condense the emotional content into fresh language that captures the feeling.",
+			"- Describe the present feeling directly (e.g., 'That sounds incredibly heavy' rather than 'The heaviness is present').",
+			"- Focus on the 'right now' experience of the user.",
 			"",
-			`USER: ${name}`,
-			`RISK: ${input.riskLevel}`,
-			`MODE: ${input.mode}`,
+			`USER_NAME: ${name}`,
+			`RISK_LEVEL: ${input.riskLevel}`,
 			`MESSAGE: "${input.userMessage}"`,
 			"",
-			"TASK: Output only the first response line that follows all rules above.",
+			"TASK: Output only the single spoken line. No meta-talk.",
 		].join("\n");
 	}
 }

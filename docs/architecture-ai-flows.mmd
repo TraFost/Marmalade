@@ -20,6 +20,7 @@ flowchart LR
 
   classDef info fill:#e8f7ff,stroke:#7cc0ff
   note[(Note: Supports streaming and non-streaming; headers x-user-id / x-session-id supported.)]:::info
+  ElevenNote[(ElevenLabs media flow: The client uses `useConversation` (`client/src/features/session/hooks/use-elevenlabs.session.ts`). Live audio/text streams go directly between the browser and ElevenLabs (WebRTC/streaming) — Marmalade does NOT proxy media. The backend handles session lifecycle (create/end internal session ids), receives turns from the ElevenLabs agent via `/v1/chat/completions`, persists messages, and emits SSE events for the UI.)]:::info
 ```
 
 # Sequence: ElevenLabs incoming request (streaming)
@@ -74,6 +75,7 @@ flowchart TB
 - MiniBrain (fast analysis)
   - Use for: immediate safety checks, building `stateRead` and `stateDelta`, suggesting probes.
   - Response must be validated with zod (already done in mini-brain client) and keep outputs small.
+  - **New (Orchestration)**: MiniBrain returns an authoritative boolean `requiresCounselor` which **gates** whether the Counselor model should run for this turn; this prevents double-responses and reduces cost/latency when not needed.
 
 - Turn Coordinator
   - Deterministic rules (server): `willStatus` reduces threshold for grounding; `interactionPreference` adjusts language plan; `lifeAnchors` bias anchoring.
@@ -99,8 +101,10 @@ flowchart TB
 - `handleUserTurnModelStream` orchestrates two concurrent streams:
   - `FirstResponse` stream (fast, short, friendly) which starts immediately and yields small chunks.
   - `Counselor` stream (pro reply) starts when either the FirstResponse finishes or emittedWordCount >= `thresholdWords` (8), to balance responsiveness and quality.
+  - **Speculative execution note**: MiniBrain and RAG are started in parallel with FirstResponse; the Counselor can be warmed-up speculatively (small warm-up + bounded buffer) and **only** flushed to the client if MiniBrain's `requiresCounselor` is true (this reduces perceived latency while preventing unnecessary counselor runs).
 - Chunks from both generators are raced and emitted to the caller (SSE or OpenAI-style `chat.completion.chunk`).
 - The function uses `finalizeAndSaveAsync` to persist the final assistant reply asynchronously so streaming doesn't block DB writes.
+- **Logging**: key decision points (Mini result, coordinator decision, RAG, counselor warm-up and first-chunk latency, final save) are emitted via the app's structured pino logger for demo and observability.
 
 ### MiniBrain & safety
 - `MiniBrain.analyzeTurn` (in `server/src/libs/ai/mini-brain.client.ts`) is the canonical per-turn classifier. Outputs are validated with Zod (`miniResponseSchema`).

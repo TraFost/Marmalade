@@ -15,6 +15,13 @@
       "when": 1766979702813,
       "tag": "0001_loose_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767073373776,
+      "tag": "0002_careless_magneto",
+      "breakpoints": true
     }
   ]
 }
