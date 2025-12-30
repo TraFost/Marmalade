@@ -16,6 +16,37 @@ export class MessageRepository {
 		return record;
 	}
 
+	async createIfNotExists(
+		data: NewMessage,
+		client: DBClient = db
+	): Promise<{ created: boolean; record?: Message }> {
+		if (data.messageId) {
+			const [existing] = await client
+				.select()
+				.from(messages)
+				.where(eq(messages.messageId, data.messageId))
+				.limit(1);
+			if (existing) {
+				return { created: false, record: existing };
+			}
+
+			const [inserted] = await client.insert(messages).values(data).returning();
+			if (inserted) return { created: true, record: inserted };
+
+			const [maybe] = await client
+				.select()
+				.from(messages)
+				.where(eq(messages.messageId, data.messageId))
+				.limit(1);
+			if (maybe) return { created: false, record: maybe };
+
+			return { created: false };
+		}
+
+		const rec = await this.create(data, client);
+		return { created: true, record: rec };
+	}
+
 	async listRecentBySession(
 		sessionId: string,
 		limit = 10,
