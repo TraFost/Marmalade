@@ -18,9 +18,8 @@ export function HeroSection() {
 				</h1>
 				<div className="my-6 h-px w-16 bg-primary/30" />
 				<p className="mx-auto max-w-2xl text-lg font-light leading-relaxed text-foreground/70">
-					Marmalade listens like the friend who never forgets what you shared.
-					Every pause, sigh, and half-finished sentence is treated with care, so
-					you can exhale without explaining yourself twice.
+					A real-time voice companion that listens, remembers, and responds,
+					secure, private, and available whenever you need to talk.
 				</p>
 
 				<div className="flex w-full flex-col items-center gap-4 pt-6 sm:w-auto sm:flex-row">
