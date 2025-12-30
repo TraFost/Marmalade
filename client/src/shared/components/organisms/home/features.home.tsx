@@ -18,33 +18,33 @@ interface FeatureHighlight {
 
 const featureHighlights: FeatureHighlight[] = [
 	{
-		title: "Voice Conversations",
+		title: "Real-time Voice",
 		description:
-			"Talk naturally. Marmalade responds with warmth and clarity, understanding nuances in tone, pace, and silence.",
+			"Natural, streaming voice replies so conversations flow without interruption.",
 		icon: Microphone,
 	},
 	{
-		title: "Emotional Baseline",
+		title: "Quick Check-ins",
 		description:
-			"Integrates short check-ins (including DASS-21) to understand where you are starting from.",
+			"Short baseline checks (sleep, mood) that personalize every session.",
 		icon: ClipboardText,
 	},
 	{
-		title: "Contextual Memory",
+		title: "Persistent Context",
 		description:
-			"Keeps track of your mood patterns so every session feels continuous.",
+			"Memory that preserves what matters, so each session picks up where the last left off.",
 		icon: Heartbeat,
 	},
 	{
 		title: "Private & Secure",
 		description:
-			"Local-first encryption ensures your thoughts remain yours alone.",
+			"Encryption-first design keeps conversations private; we never sell your data.",
 		icon: ShieldCheck,
 	},
 	{
-		title: "Personalized Guidance",
+		title: "Durable Delivery",
 		description:
-			"Responses adapt to your emotional history. If you're anxious, it slows down. If you're sad, it offers presence.",
+			"Idempotent saves and resilient session handling reduce message loss.",
 		icon: Sparkle,
 	},
 ];
