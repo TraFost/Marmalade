@@ -28,8 +28,8 @@ export class EmbeddingRepository {
 		limit = 5,
 		filter?: KbSearchFilter,
 		client = db
-	) {
-		const embedding = await this.embedder.embed(text);
+	): Promise<RetrievedDoc[]> {
+		const embedding = await this.embedder.embedQuery(text);
 
 		const searchBuffer = limit * this.SEARCH_BUFFER_MULTIPLIER;
 
@@ -52,7 +52,7 @@ export class EmbeddingRepository {
 				...k,
 				source: "kb" as const,
 				tags: k.tags,
-				minSeverity: k.minSeverity,
+				severity: k.minSeverity,
 			})),
 		];
 

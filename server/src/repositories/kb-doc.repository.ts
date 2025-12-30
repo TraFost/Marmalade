@@ -22,7 +22,7 @@ export class KbDocRepository {
 
 		const conditions = [isNotNull(kbDocs.embedding)];
 
-		if (filter?.minSeverity) {
+		if (filter?.minSeverity !== undefined) {
 			conditions.push(gte(kbDocs.minSeverity, filter.minSeverity));
 		}
 
