@@ -34,7 +34,7 @@ flowchart LR
     StateService[StateMappingService<br/>(merges signals & anchors)]
     SessionService[SessionService<br/>(bootstrap from screenings -> graph)]
     ConvService[ConversationService<br/>(turn pipeline)]
-    MiniBrain[MiniBrainClient<br/>(fast state-read + delta)]
+    MiniBrain[MiniBrainClient<br/>(fast state-read + delta) <br/>**(returns authoritative "requiresCounselor" flag)**]
     TurnCoord[Turn Coordinator<br/>(language-shaper, arbiter, monitor, memory-curator)]
     LangShaper[Language Shaper<br/>(pref-aware)]
     Arbiter[Intervention Arbiter<br/>(gating rules)]
@@ -72,6 +72,7 @@ flowchart LR
   ConvService -->|call| Counselor
   %% Counselor is wrapped with timeout (withTimeout → EMERGENCY_PACKET fallback)
   Counselor -. withTimeout/EMERGENCY_PACKET .-> ConvService
+  %% NEW: Counselor execution is *gated* by MiniBrain's `requiresCounselor` decision — ConvService will short-circuit and skip Counselor when Mini says `false` (reduces double-responses).
   FirstResponse --> ConvService
   Counselor -->|reply| ConvService
   ConvService -->|emit events| EventBusNode
@@ -83,8 +84,12 @@ flowchart LR
   %% Notes
   classDef note fill:#f6f9ff,stroke:#c6d8ff;
   Note[(Note: State mapping stored in preferences JSON — no DB migrations required)]:::note
+  LogNote[(Logging & observability: structured pino logger added and used across services for demo traces — Mini decisions, coordinator outputs, RAG results, Counselor warm-up/first-chunk timing, and save events are logged.)]:::note
+  UIChangeNote[(Client: Text Mode now mutes mic when enabled; global CSS hides scrollbars for demo UI tweaks.)]:::note
+  AuthNote[(Auth: Better-Auth validates callback origins via `trustedOrigins` (env-driven). Local callback origins must be included or proxied via tunnel for deployed backend.)]:::note
+  ElevenNote[(Real-time media and conversational streaming are handled by ElevenLabs via the client hook `useConversation` / `useElevenlabsSession`. The client opens a WebRTC/streaming session directly with ElevenLabs (audio & text deltas), so live media does **not** flow through the Marmalade backend. The backend remains responsible for session lifecycle (create/end internal session ids), processing turns via hooks (`/v1/chat/completions`), persisting messages, and emitting SSE events for client UI updates.)]:::note
   RiskNote[(Risk mapping: 0–4 → normal / caution / high_caution / crisis)<br/>See `getSafetyMode()` in `server/src/services/conversation.service.ts`.]:::note
-  RaceNote[(Streaming race: FirstResponse provides quick text; Counselor starts once emittedWordCount >= threshold)<br/>See `handleUserTurnModelStream()`]:::note
+  RaceNote[(Streaming race: FirstResponse provides quick text; MiniBrain + RAG **start in parallel** with FirstResponse. Counselor is *only* started when both the emitted-word threshold is reached AND MiniBrain's `requiresCounselor` is true. If Mini decides `false`, the stream is short-circuited and the Counselor is skipped.)<br/>See `handleUserTurnModelStream()` and MiniBrain `requiresCounselor` docs.]:::note
 
   %% File references (legend)
   subgraph REFS ["Key files / types"]
