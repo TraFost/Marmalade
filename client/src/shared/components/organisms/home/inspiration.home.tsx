@@ -2,38 +2,46 @@ import {
 	ArrowRightIcon,
 	HandshakeIcon,
 	MoonStarsIcon,
-	ShieldCheckIcon,
 	SparkleIcon,
+	Microphone,
+	ClipboardText,
 } from "@phosphor-icons/react";
 
 const HIGHLIGHTS = [
 	{
-		title: "Radical Acceptance",
+		title: "Real-time Streaming",
 		description:
-			"Modeled after Rogers' unconditional positive regard. We don't judge your thoughts; we help you explore them.",
-		icon: HandshakeIcon,
+			"Instant, streaming voice replies so conversations flow naturally and you hear a steady, human voice.",
+		icon: Microphone,
 		accent: "bg-primary/15 text-primary",
 	},
 	{
-		title: "24/7 Presence",
+		title: "Safety-first",
 		description:
-			"Anxiety doesn't adhere to business hours. Whether it's 3 AM insomnia or a midday spiral, Marmalade listens.",
+			"Lightweight safety scans (MiniBrain) detect risk early and prioritize safety-first responses.",
+		icon: ClipboardText,
+		accent: "bg-foreground/5 text-foreground",
+	},
+	{
+		title: "Persistent Context",
+		description:
+			"Memory that keeps important context across sessions so you never have to repeat yourself.",
+		icon: HandshakeIcon,
+		accent: "bg-foreground/5 text-foreground",
+	},
+	{
+		title: "Always-on Presence",
+		description:
+			"A companion available around the clock for check-ins and steady presence.",
 		icon: MoonStarsIcon,
-		accent: "bg-foreground/5 text-foreground",
-	},
-	{
-		title: "Private by Design",
-		description:
-			"Local-first encryption keeps every whisper on your device. We never trade or monetize sensitive data.",
-		icon: ShieldCheckIcon,
-		accent: "bg-foreground/5 text-foreground",
-	},
-	{
-		title: "Guided Clarity",
-		description:
-			"When the world feels loud, we break overwhelm into grounded prompts so you can take one breath at a time.",
-		icon: SparkleIcon,
 		accent: "bg-accent/30 text-primary",
+	},
+	{
+		title: "AI Report (SOAP)",
+		description:
+			"Generate a structured session summary (SOAP) highlighting themes, risks, and suggested next steps.",
+		icon: SparkleIcon,
+		accent: "bg-foreground/5 text-foreground",
 	},
 ];
 
@@ -52,10 +60,42 @@ export function InspirationSection() {
 							<span className="text-primary/90">Marmalade.</span>
 						</h2>
 						<p className="text-base text-foreground/70">
-							Therapy is expensive. Friends are busy. Sometimes you just need a
-							space that exists solely for you to be heard—without judgment,
-							waiting lists, or fees.
+							Accessible, affordable, and always on, Marmalade provides a
+							private space that exists solely for you to be heard without
+							judgment, waiting lists, or fees.
 						</p>
+
+						<div className="mt-6 rounded-2xl border border-border/40 bg-card/95 p-6 text-sm text-foreground/70">
+							<h4 className="mb-3 font-semibold text-foreground">
+								Under the hood
+							</h4>
+							<ul className="space-y-2 list-inside">
+								<li>
+									<strong>Fast safety checks:</strong> a lightweight classifier
+									scans each turn and can gate deeper replies for safety.
+								</li>
+								<li>
+									<strong>Deterministic coordination:</strong> small,
+									explainable rules shape tone, grounding, and interventions.
+								</li>
+								<li>
+									<strong>Streaming-first replies:</strong> short
+									acknowledgements start immediately while fuller replies stream
+									in.
+								</li>
+								<li>
+									<strong>Reliable delivery:</strong> idempotent background
+									saves reduce the chance of dropped messages on server
+									restarts.
+								</li>
+								<li>
+									<strong>AI Report (SOAP):</strong> generate a structured
+									session summary capturing themes, risk, and suggested next
+									steps.
+								</li>
+							</ul>
+						</div>
+
 						<a
 							href="#"
 							className="group inline-flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-primary"
