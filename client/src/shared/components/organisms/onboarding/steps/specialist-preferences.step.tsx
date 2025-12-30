@@ -190,30 +190,34 @@ export function SpecialistPreferencesStep({
 			>
 				<textarea
 					rows={4}
-					placeholder={"Example:\nMy little sister\nFinishing my degree\nPutting food on the table for my family"}
+					placeholder={
+						"Example:\nMy little sister\nFinishing my degree\nPutting food on the table for my family"
+					}
 					className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
-				value={lifeAnchorsText}
-				onChange={(event) => setLifeAnchorsText(event.target.value)}
-				onBlur={() => onUpdateField("lifeAnchors", parseList(lifeAnchorsText))}
-			/>
-		</OnboardingSection>
-
-		{formData.goals.includes("Deal with something that's stuck") && (
-			<OnboardingSection
-				title="Anything else that's hard to let go of?"
-				description="A memory, a 'what if', or an argument that feels stuck. Marmalade can help you process these."
-			>
-				<textarea
-					rows={4}
-					placeholder="Example: A conversation I keep replaying in my head..."
-					className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
-					value={formData.unfinishedLoops}
-					onChange={(event) =>
-						onUpdateField("unfinishedLoops", event.target.value)
+					value={lifeAnchorsText}
+					onChange={(event) => setLifeAnchorsText(event.target.value)}
+					onBlur={() =>
+						onUpdateField("lifeAnchors", parseList(lifeAnchorsText))
 					}
 				/>
 			</OnboardingSection>
-		)}
+
+			{formData.goals.includes("Deal with something that's stuck") && (
+				<OnboardingSection
+					title="Anything else that's hard to let go of?"
+					description="A memory, a 'what if', or an argument that feels stuck. Marmalade can help you process these."
+				>
+					<textarea
+						rows={4}
+						placeholder="Example: A conversation I keep replaying in my head..."
+						className="w-full rounded-2xl border border-border bg-secondary/30 px-3 py-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:bg-card"
+						value={formData.unfinishedLoops}
+						onChange={(event) =>
+							onUpdateField("unfinishedLoops", event.target.value)
+						}
+					/>
+				</OnboardingSection>
+			)}
 		</div>
 	);
 }
