@@ -1,5 +1,4 @@
 import {
-	ArrowRightIcon,
 	HandshakeIcon,
 	MoonStarsIcon,
 	SparkleIcon,
@@ -95,17 +94,6 @@ export function InspirationSection() {
 								</li>
 							</ul>
 						</div>
-
-						<a
-							href="#"
-							className="group inline-flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-primary"
-						>
-							Read our manifesto
-							<ArrowRightIcon
-								size={16}
-								className="transition-transform group-hover:translate-x-1"
-							/>
-						</a>
 					</div>
 					<div className="grid gap-6 sm:grid-cols-2 lg:col-span-8">
 						{HIGHLIGHTS.map(

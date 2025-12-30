@@ -55,7 +55,10 @@ interface FeatureSectionProps {
 
 export function FeatureSection({ className }: FeatureSectionProps) {
 	return (
-		<section className={cn("relative mx-auto max-w-6xl px-6 py-24", className)}>
+		<section
+			id="features"
+			className={cn("relative mx-auto max-w-6xl px-6 py-24", className)}
+		>
 			<div className="grid gap-16 lg:grid-cols-[1fr_1.1fr] lg:items-center">
 				<div className="order-2 lg:order-1">
 					<div className="relative aspect-4/5 overflow-hidden rounded-4xl border border-border/40 bg-card">

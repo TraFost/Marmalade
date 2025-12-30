@@ -15,8 +15,10 @@ interface NavbarProps {
 
 const navLinks: NavLink[] = [
 	{ href: "#how-it-works", label: "How it works" },
+	{ href: "#features", label: "Features" },
 	{ href: "#about", label: "Our Story" },
-	{ href: "#", label: "Privacy" },
+	{ href: "#story", label: "Inspiration" },
+	{ href: "#support", label: "Support" },
 ];
 
 export function Navbar({ className }: NavbarProps) {
@@ -55,7 +57,7 @@ export function Navbar({ className }: NavbarProps) {
 						asChild
 						className="hidden text-sm font-medium text-foreground hover:text-primary sm:inline-flex"
 					>
-						<a href="#">Get Started</a>
+						<a href="#cta">Get Started</a>
 					</Button>
 				</div>
 			</div>
