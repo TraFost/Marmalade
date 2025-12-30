@@ -54,7 +54,7 @@ export function InspirationSection() {
 							Our Philosophy
 						</p>
 						<h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-5xl">
-							Why we built
+							Why i built
 							<br />
 							<span className="text-primary/90">Marmalade.</span>
 						</h2>
