@@ -248,8 +248,13 @@ export class CounselorBrainClient {
         # TASK
         ${memoryContext || "No specific memories."}
         
+        # LAYER CONSTRAINTS (CRITICAL)
+        The first layer has ALREADY reflected the user's immediate feeling.
+        - Do NOT just mirror the emotion again (e.g. avoid starting with "This [feeling]...").
+        - Instead, EXTEND the thought. Add a new perspective, a grounding metaphor, or a gentle nudge.
+        - Your job is to be the bridge, not the echo.
+
         Continue the conversation based on the System Instructions. 
-        Remember: The first layer already said hello/acknowledged the user. 
         Jump straight into the ${
 					input.preferences?.responseClass || "reflection"
 				}.

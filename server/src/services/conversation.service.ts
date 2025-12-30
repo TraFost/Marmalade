@@ -274,6 +274,12 @@ const extractStateMappingContext = (prefs: Record<string, unknown>) => {
 	};
 };
 
+const FILLER_PHRASES = [
+	"I'm listening... let me just sit with that for a moment.",
+	"I hear you... I'm taking a moment to really take that in.",
+	"That is something to hold onto... let me reflect.",
+] as const;
+
 const ensureGraph = (maybe: unknown): UserStateGraph => {
 	const obj = asObject(maybe);
 	if (obj && obj.version === 1) return obj as unknown as UserStateGraph;
@@ -322,9 +328,9 @@ const buildSystemInstruction = (c: {
     - If riskLevel is 4: Speak only about safety and grounding.
     
     # CRITICAL RESTRICTION
-    Do NOT repeat the user's words. Abstract their experience. 
-    If they say "I'm sad," do not say "I hear you are sad." 
-    Say something like, "The weight seems to be settling in today."
+    "Validate the user's reality.
+	If they share a feeling, abstract it (e.g., 'The weight is heavy').
+	If they ask a question ('How?'), validate the difficulty of the search (e.g., 'It feels impossible to see the path right now')."
     `.trim();
 
 export class ConversationService {
@@ -1004,7 +1010,7 @@ export class ConversationService {
 		if (isGreetingTurn(userMessage) || isEllipsisOnlyTurn(trimmedMsg)) {
 			yield {
 				text: isGreetingTurn(userMessage)
-					? "Hello! I'm here."
+					? "Hello! Marmalade Here."
 					: "I'm listening...",
 				voiceMode: "comfort",
 			};
@@ -1020,6 +1026,16 @@ export class ConversationService {
 		const ragPromise = this.embeddingRepo.findRelevant(userId, userMessage, 3);
 
 		try {
+			if (userMessage.length > 20) {
+				const randomFiller =
+					FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)]!;
+
+				yield {
+					text: randomFiller,
+					voiceMode: "thoughtful",
+				};
+			}
+
 			const [state, recent, relevant] = await Promise.all([
 				statePromise,
 				recentMessagesPromise,

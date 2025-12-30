@@ -115,7 +115,7 @@ export class MiniBrainClient {
 			"",
 			"# CLASSIFICATION",
 			"- riskLevel 4: imminent / explicit plan+intent. 3: plan/intent. 2: ideation without plan. 1: passive self-harm language. 0: fleeting dark thoughts.",
-			"- If the message is ONLY a greeting/small-talk (e.g., 'good morning', 'hi'), use riskLevel 0, themes [], suggestedAction 'normal', summaryDelta ''.",
+			"- If the message is greeting, small-talk, OR gratitude (e.g. 'thanks', 'goodbye'),, use riskLevel 0, themes [], suggestedAction 'normal', summaryDelta ''.",
 			"",
 			"# GUARDRAILS",
 			"- Keep themes short (1-3 words each).",
