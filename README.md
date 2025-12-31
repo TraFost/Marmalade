@@ -167,27 +167,27 @@ Environment validation failures are reported at startup with explicit missing ke
 
 ### Marmalade end to end flow
 
-![Marmalade end to end flow](docs/marmalade end-to-end flow.png)
+<img src="./docs/marmalade%20end-to-end%20flow.png" alt="Marmalade end-to-end flow" width="700"/>
 
 High level system flow from client to server, agent orchestration, persistence, and reporting.
 
 ### Marmalade server AI flow
 
-![Marmalade server AI flow](docs/marmalade server ai flow.png)
+<img src="./docs/marmalade%20server%20ai%20flow.png" alt="Marmalade server AI flow" width="700"/>
 
 Server side orchestration showing Mini and Counselor agents and their execution order.
 
 ### Marmalade agent restriction
 
-![Marmalade agent restriction](docs/marmalade agent restriction.png)
+<img src="./docs/marmalade%20agent%20restriction.png" alt="Marmalade agent restriction" width="700"/>
 
 Deterministic safety boundaries enforced outside of model prompting.
 
 ### Report flow
 
-![Report flow](docs/report flow.png)
+<img src="./docs/report%20flow.png" alt="Report flow" width="700"/>
 
-Incident reporting and analytics pipeline.
+POST /reports/session: authenticate, validate finished session, gather recent turns and session state, generate a strict JSON SOAP-style report via Vertex (`SessionReportClient`), validate schema, return `{ sessionId, report, meta }`.
 
 ---
 
