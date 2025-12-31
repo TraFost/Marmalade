@@ -70,15 +70,8 @@ export function SessionPage() {
 	}, [end, internalSessionId, navigate]);
 
 	const showDots = useMemo(() => {
-		const hasText = Boolean(lastText.trim().length);
-		if (hasText) return false;
-		return (
-			status === "connecting" ||
-			orbState === "processing" ||
-			orbState === "speaking" ||
-			phase !== "idle"
-		);
-	}, [lastText, phase, status, orbState]);
+		return status === "connecting" || orbState === "processing";
+	}, [status, orbState]);
 
 	return (
 		<section className="relative w-full min-h-dvh text-slate-50 selection:bg-primary/40 flex flex-col">

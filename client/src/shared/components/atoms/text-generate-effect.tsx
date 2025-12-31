@@ -1,21 +1,45 @@
 import { useEffect, useState, useRef } from "react";
 import { motion } from "motion/react";
 
-export function TextGenerateEffect({ text }: { text: string }) {
+export function TextGenerateEffect({
+	text,
+	onStart,
+	onComplete,
+}: {
+	text: string;
+	onStart?: () => void;
+	onComplete?: () => void;
+}) {
 	const [displayedText, setDisplayedText] = useState("");
 	const indexRef = useRef(0);
+	const startedRef = useRef(false);
+	const completedRef = useRef(false);
 
 	useEffect(() => {
 		if (text.length === 0) {
 			setDisplayedText("");
 			indexRef.current = 0;
+			if (!completedRef.current) {
+				completedRef.current = true;
+				onComplete?.();
+			}
+			startedRef.current = false;
 			return;
 		}
 
 		if (text.length < displayedText.length) {
 			setDisplayedText(text);
 			indexRef.current = text.length;
+			completedRef.current = true;
+			startedRef.current = false;
+			onComplete?.();
 			return;
+		}
+
+		if (!startedRef.current) {
+			startedRef.current = true;
+			completedRef.current = false;
+			onStart?.();
 		}
 
 		const interval = setInterval(() => {
@@ -24,11 +48,20 @@ export function TextGenerateEffect({ text }: { text: string }) {
 				indexRef.current++;
 			} else {
 				clearInterval(interval);
+				completedRef.current = true;
+				startedRef.current = false;
+				onComplete?.();
 			}
-		}, 25);
+		}, 50);
 
-		return () => clearInterval(interval);
-	}, [text, displayedText.length]);
+		return () => {
+			clearInterval(interval);
+			if (!completedRef.current) {
+				completedRef.current = true;
+				onComplete?.();
+			}
+		};
+	}, [text, displayedText.length, onStart, onComplete]);
 
 	return (
 		<motion.span>

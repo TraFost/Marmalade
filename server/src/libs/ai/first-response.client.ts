@@ -1,6 +1,7 @@
 import { VertexAI } from "@google-cloud/vertexai";
 
 import { env } from "../../configs/env.config";
+import { logger } from "../logger";
 
 export type FirstResponseInput = {
 	userMessage: string;
@@ -75,16 +76,19 @@ export class FirstResponseClient {
 
 		try {
 			const tokenMeta = res?.response ?? null;
-			console.info("[AI][FirstResponse] Vertex response (trimmed):", {
-				candidates: (tokenMeta?.candidates ?? []).length,
-				metadata: (tokenMeta as any)?.metadata ?? null,
-			});
+			logger.info(
+				{
+					candidates: (tokenMeta?.candidates ?? []).length,
+					metadata: (tokenMeta as any)?.metadata ?? null,
+				},
+				"[AI][FirstResponse] Vertex response (trimmed)"
+			);
 			const usage = extractTokenUsage(res);
-			if (usage) console.info("[AI][FirstResponse] token usage:", usage);
+			if (usage) logger.info({ usage }, "[AI][FirstResponse] token usage");
 		} catch (logErr) {
-			console.warn(
-				"[AI][FirstResponse] Failed to log Vertex response:",
-				logErr
+			logger.warn(
+				{ err: logErr },
+				"[AI][FirstResponse] Failed to log Vertex response"
 			);
 		}
 

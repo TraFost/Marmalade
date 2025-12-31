@@ -76,6 +76,10 @@ function extractMessageText(message: any): {
 		return { text: String(textFromFields), isDelta: false, id: msgId };
 	}
 
+	if (message?.source === "ai" && message?.message) {
+		return { text: message.message, isDelta: true, id: null };
+	}
+
 	return { text: "", isDelta: false, id: msgId };
 }
 
@@ -102,6 +106,7 @@ export function useElevenlabsSession(
 	const textAccumulator = useRef("");
 	const lastMessageIdRef = useRef<string | null>(null);
 	const internalSessionIdRef = useRef<string | null>(null);
+	const phaseRef = useRef<Phase>("idle");
 	const lastModeRef = useRef<ElevenLabsMode>("unknown");
 	const startingRef = useRef<Promise<void> | null>(null);
 	const endingRef = useRef<ReturnType<
@@ -112,12 +117,15 @@ export function useElevenlabsSession(
 
 	const conversation = useConversation({
 		micMuted,
-		onError: (err: any) => {
-			setError(
-				err instanceof Error ? err.message : String(err ?? "Conversation error")
-			);
+		onError: () => {
+			if (status === "connected") {
+				conversation.endSession();
+			}
+			setError("Voice connection lost. Please refresh or restart.");
 		},
 		onMessage: (m) => {
+			console.log("RAW MESSAGE:", JSON.stringify(m, null, 2));
+
 			const { text, isDelta, id } = extractMessageText(m);
 			if (!text) return;
 
@@ -125,9 +133,6 @@ export function useElevenlabsSession(
 				textAccumulator.current = "";
 				lastMessageIdRef.current = id;
 			}
-
-			console.log(text, "<<text");
-			console.log(isDelta, id, "<<< additional information");
 
 			if (isDelta) {
 				textAccumulator.current = textAccumulator.current + text;
@@ -147,12 +152,14 @@ export function useElevenlabsSession(
 				const prevMode = lastModeRef.current;
 				lastModeRef.current = nextMode as ElevenLabsMode;
 
-				if (nextMode === "listening" && prevMode === "speaking") {
+				if (
+					nextMode === "listening" &&
+					prevMode === "speaking" &&
+					phaseRef.current !== "idle"
+				) {
 					const sid = internalSessionIdRef.current;
 					if (sid) {
-						void cancelServerTurn(sid).catch(() => {
-							// best-effort
-						});
+						void cancelServerTurn(sid).catch(() => {});
 					}
 				}
 
@@ -183,6 +190,10 @@ export function useElevenlabsSession(
 	useEffect(() => {
 		statusRef.current = safeStatus;
 	}, [safeStatus]);
+
+	useEffect(() => {
+		phaseRef.current = phase;
+	}, [phase]);
 
 	useEffect(() => {
 		try {
@@ -327,11 +338,6 @@ export function useElevenlabsSession(
 	const sendText = useCallback(
 		(text: string) => {
 			if (!text.trim()) return;
-			const sid = internalSessionIdRef.current;
-
-			if (sid) {
-				void cancelServerTurn(sid).catch(() => {});
-			}
 
 			(conversation as any).sendUserMessage(text.trim());
 		},
