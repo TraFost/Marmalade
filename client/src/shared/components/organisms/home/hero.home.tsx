@@ -1,8 +1,15 @@
 import { MicrophoneIcon, PlayCircleIcon } from "@phosphor-icons/react";
+import { useNavigate } from "react-router";
 
 import { Button } from "@/shared/components/atoms/button";
 
 export function HeroSection() {
+	const navigate = useNavigate();
+
+	const handleStartSession = () => {
+		navigate("/login");
+	};
+
 	return (
 		<section className="flex min-h-dvh items-center justify-center overflow-hidden px-6">
 			<div className="mx-auto flex max-w-4xl flex-col items-center text-center">
@@ -26,11 +33,15 @@ export function HeroSection() {
 					<Button
 						variant="primary"
 						className="w-full rounded-full px-8 py-4 text-base font-semibold tracking-tight transition-transform duration-300 hover:-translate-y-0.5 sm:w-auto"
+						onClick={handleStartSession}
 					>
 						<MicrophoneIcon size={24} weight="duotone" />
-						Start Session
+						Begin Session
 					</Button>
 					<Button
+						onClick={() =>
+							window.open("https://youtu.be/07B0Z_tuYIw", "_blank")
+						}
 						variant="secondary"
 						className="w-full rounded-full px-8 py-4 text-base font-medium tracking-tight transition-transform duration-300 hover:-translate-y-0.5 sm:w-auto"
 					>
